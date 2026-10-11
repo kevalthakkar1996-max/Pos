@@ -2,1291 +2,706 @@
 <html lang="gu">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Unified Enterprise Retail POS</title>
-  <!-- Tailwind CSS -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Smart Retail POS</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Vue 3, Dexie.js & QR Code Generator -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Noto+Sans+Gujarati:wght@500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Noto+Sans+Gujarati:wght@400;600;700&display=swap');
     body { font-family: 'Noto Sans Gujarati', 'Plus Jakarta Sans', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 select-none overflow-hidden h-screen">
+<body class="bg-slate-950 text-slate-100 h-screen w-screen overflow-hidden select-none flex flex-col justify-between">
 
-<div id="app" class="flex flex-col h-full">
+<div id="app" class="h-full w-full flex flex-col overflow-hidden relative">
 
-  <!-- TOP HEADER & OPERATIONAL BAR -->
-  <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shadow-xl z-20">
-    <div class="flex items-center space-x-3">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-lg shadow-lg shadow-teal-500/20">
+  <!-- ================= TOP APP BAR ================= -->
+  <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-lg">
+    <div class="flex items-center space-x-2.5">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-base shadow-md shadow-emerald-500/20">
         P
       </div>
       <div>
-        <h1 class="font-extrabold text-sm tracking-wide text-white flex items-center gap-2">
+        <h1 class="font-extrabold text-xs text-white leading-tight flex items-center gap-1.5">
           {{ config.storeName }}
-          <span class="text-[10px] px-2 py-0.5 rounded-full font-bold" :class="isOnline ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'">
-            {{ isOnline ? 'ONLINE' : 'OFFLINE MODE' }}
-          </span>
-          <span class="text-[10px] px-2 py-0.5 rounded-full font-bold" :class="isShiftOpen ? 'bg-teal-500/10 text-teal-300 border border-teal-500/30' : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'">
-            {{ isShiftOpen ? t('shift_open') : t('shift_closed') }}
-          </span>
+          <span class="w-2 h-2 rounded-full" :class="isShiftOpen ? 'bg-emerald-400' : 'bg-rose-500'"></span>
         </h1>
-        <p class="text-[11px] text-slate-400">GSTIN: {{ config.gstin }} • Terminal #01</p>
+        <p class="text-[10px] text-slate-400">GSTIN: {{ config.gstin }}</p>
       </div>
     </div>
 
-    <!-- HARDWARE CONTROLS & LOCALIZATION -->
-    <div class="flex items-center space-x-2">
-      <!-- Camera Barcode Scanner Trigger -->
-      <button 
-        @click="toggleCameraScanner"
-        :class="cameraActive ? 'bg-teal-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'"
-        class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition flex items-center gap-1.5 shadow-sm"
-      >
-        <span>📷</span> {{ cameraActive ? t('stop_camera') : t('scan_barcode') }}
+    <!-- Quick Tools -->
+    <div class="flex items-center space-x-1.5">
+      <!-- Camera Scan -->
+      <button @click="toggleCameraScanner" :class="cameraActive ? 'bg-teal-500 text-slate-950' : 'bg-slate-800 text-slate-300'" class="p-2 rounded-xl border border-slate-700 text-xs flex items-center justify-center">
+        📷
       </button>
 
-      <!-- Web Bluetooth Thermal Printer Connector -->
-      <button 
-        @click="connectPrinter" 
-        :class="printerConnected ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/40 shadow-emerald-500/10' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'"
-        class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition flex items-center gap-1.5 shadow-sm"
-      >
-        <span class="w-2 h-2 rounded-full" :class="printerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'"></span>
-        {{ printerConnected ? t('printer_online') : t('connect_printer') }}
+      <!-- Bluetooth Printer -->
+      <button @click="connectPrinter" :class="printerConnected ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' : 'bg-slate-800 text-slate-400 border-slate-700'" class="p-2 rounded-xl border text-xs flex items-center justify-center">
+        🖨️
       </button>
 
       <!-- Language Selector -->
-      <div class="inline-flex rounded-lg bg-slate-950 border border-slate-800 p-0.5 shadow-inner">
-        <button @click="setLang('en')" :class="lang === 'en' ? 'bg-teal-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1 text-xs rounded-md transition">ENG</button>
-        <button @click="setLang('hi')" :class="lang === 'hi' ? 'bg-teal-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1 text-xs rounded-md transition">हिंदी</button>
-        <button @click="setLang('gu')" :class="lang === 'gu' ? 'bg-teal-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1 text-xs rounded-md transition">ગુજરાતી</button>
+      <div class="inline-flex rounded-xl bg-slate-950 border border-slate-800 p-0.5">
+        <button @click="setLang('gu')" :class="lang === 'gu' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'" class="px-2 py-1 text-[10px] rounded-lg">ગુ</button>
+        <button @click="setLang('hi')" :class="lang === 'hi' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'" class="px-2 py-1 text-[10px] rounded-lg">हिં</button>
+        <button @click="setLang('en')" :class="lang === 'en' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'" class="px-2 py-1 text-[10px] rounded-lg">EN</button>
       </div>
     </div>
   </header>
 
-  <!-- NAVIGATION TABS -->
-  <nav class="bg-slate-900/80 backdrop-blur border-b border-slate-800 px-4 flex space-x-1 z-10">
-    <button 
-      v-for="tab in navigationTabs" 
-      :key="tab.id" 
-      @click="activeTab = tab.id" 
-      :class="activeTab === tab.id ? 'border-teal-400 text-teal-300 font-bold bg-teal-500/5' : 'border-transparent text-slate-400 hover:text-slate-200'"
-      class="py-2.5 px-3 text-xs border-b-2 flex items-center gap-2 transition"
-    >
-      <span>{{ tab.icon }}</span>
-      <span>{{ t(tab.key) }}</span>
-      <span v-if="tab.id === 'parked' && parkedCarts.length" class="ml-1 px-1.5 py-0.2 text-[10px] rounded-full bg-teal-500/20 text-teal-300 font-bold border border-teal-500/30">
-        {{ parkedCarts.length }}
-      </span>
-    </button>
-  </nav>
-
-  <!-- NON-BLOCKING STATUS BANNER -->
-  <div v-if="bannerNotice" class="bg-teal-500/10 border-b border-teal-500/20 text-teal-200 px-4 py-2 text-xs flex justify-between items-center transition">
-    <span class="flex items-center gap-2">🔔 {{ bannerNotice }}</span>
-    <button @click="bannerNotice = null" class="text-teal-400 font-bold text-base hover:text-white">&times;</button>
+  <!-- Banner Alerts -->
+  <div v-if="bannerNotice" class="bg-emerald-500/10 border-b border-emerald-500/20 px-3 py-1.5 text-xs text-emerald-300 flex justify-between items-center shrink-0">
+    <span>🔔 {{ bannerNotice }}</span>
+    <button @click="bannerNotice = null" class="font-bold text-sm leading-none">&times;</button>
   </div>
 
-  <!-- WORKSPACE VIEWPORT -->
-  <main class="flex-1 flex overflow-hidden relative">
+  <!-- Camera Live View -->
+  <div v-show="cameraActive" class="absolute top-12 left-4 right-4 z-40 bg-slate-900 border border-teal-500 rounded-2xl p-3 shadow-2xl flex flex-col items-center">
+    <div class="w-full flex justify-between items-center mb-2">
+      <span class="text-xs font-bold text-teal-300">બારકોડ સ્કેનર</span>
+      <button @click="toggleCameraScanner" class="text-rose-400 text-sm font-black">&times; બંધ કરો</button>
+    </div>
+    <video ref="cameraVideoRef" autoplay playsinline muted class="w-full h-44 bg-black rounded-xl object-cover"></video>
+  </div>
 
-    <!-- CAMERA SCANNER OVERLAY -->
-    <div v-show="cameraActive" class="absolute top-2 left-2 z-30 w-72 bg-slate-900 border border-teal-500/50 rounded-2xl shadow-2xl p-2 overflow-hidden flex flex-col items-center">
-      <div class="w-full flex justify-between items-center px-1 pb-1">
-        <span class="text-[11px] font-bold text-teal-300">Target Barcode</span>
-        <button @click="toggleCameraScanner" class="text-xs text-rose-400 font-bold">&times;</button>
+  <!-- ================= MAIN CONTENT VIEWPORT ================= -->
+  <main class="flex-1 overflow-y-auto px-3 py-2 pb-24 no-scrollbar">
+
+    <!-- 1. COUNTER SCREEN -->
+    <div v-show="activeTab === 'pos'" class="space-y-3">
+      <!-- Search & Category Filters -->
+      <div class="space-y-2">
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">🔍</span>
+          <input 
+            v-model="productFilter" 
+            type="text" 
+            :placeholder="t('search_placeholder')" 
+            class="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-900 border border-slate-800 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+
+        <div class="flex gap-1.5 overflow-x-auto no-scrollbar">
+          <button 
+            @click="selectedCategory = 'all'" 
+            :class="selectedCategory === 'all' ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-900 text-slate-400 border border-slate-800'" 
+            class="px-3 py-1.5 text-xs rounded-xl whitespace-nowrap transition"
+          >
+            {{ t('cat_all') }}
+          </button>
+          <button 
+            v-for="cat in categories" 
+            :key="cat" 
+            @click="selectedCategory = cat" 
+            :class="selectedCategory === cat ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-900 text-slate-400 border border-slate-800'" 
+            class="px-3 py-1.5 text-xs rounded-xl whitespace-nowrap transition"
+          >
+            {{ cat }}
+          </button>
+        </div>
       </div>
-      <video ref="cameraVideoRef" autoplay playsinline muted class="w-full h-40 bg-black rounded-lg object-cover"></video>
-      <p class="text-[10px] text-slate-400 mt-1">USB Scanners also work globally</p>
+
+      <!-- Modern 2-Column Product Cards -->
+      <div class="grid grid-cols-2 gap-2.5">
+        <div 
+          v-for="p in visibleProducts" 
+          :key="p.id" 
+          @click="addItemToCart(p)"
+          class="bg-slate-900 border border-slate-800 active:scale-95 transition rounded-2xl p-3 flex flex-col justify-between shadow-sm relative overflow-hidden"
+        >
+          <div>
+            <div class="flex justify-between items-center text-[10px] text-slate-400 mb-1">
+              <span>#{{ p.code }}</span>
+              <span :class="p.stock <= 5 ? 'text-rose-400 font-bold' : 'text-slate-400'">સ્ટોક: {{ p.stock }}</span>
+            </div>
+            <h3 class="text-xs font-bold text-white line-clamp-2 leading-snug">{{ p.name[lang] }}</h3>
+          </div>
+
+          <div class="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between">
+            <span class="text-sm font-black text-emerald-400">₹{{ p.price.toFixed(2) }}</span>
+            <span class="w-7 h-7 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-black text-sm">
+              +
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- ==================================================================== -->
-    <!-- TAB 1: POS BILLING COUNTER                                           -->
-    <!-- ==================================================================== -->
-    <div v-show="activeTab === 'pos'" class="flex-1 flex overflow-hidden">
-      <!-- Left Panel: Product Catalog -->
-      <section class="flex-1 flex flex-col p-3 overflow-hidden bg-slate-950">
-        <!-- Search & Category Filters -->
-        <div class="mb-3 flex gap-2">
-          <div class="relative flex-1">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">🔍</span>
-            <input 
-              v-model="productFilter" 
-              ref="barcodeInputRef"
-              type="text" 
-              :placeholder="t('search_placeholder')" 
-              class="w-full pl-9 pr-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
-            />
-          </div>
-          <div class="flex gap-1 overflow-x-auto no-scrollbar">
-            <button 
-              @click="selectedCategory = 'all'" 
-              :class="selectedCategory === 'all' ? 'bg-teal-600 text-white font-bold' : 'bg-slate-900 text-slate-400 hover:text-white'" 
-              class="px-3 py-1.5 text-xs rounded-xl whitespace-nowrap transition"
-            >
-              {{ t('cat_all') }}
-            </button>
-            <button 
-              v-for="cat in categories" 
-              :key="cat" 
-              @click="selectedCategory = cat" 
-              :class="selectedCategory === cat ? 'bg-teal-600 text-white font-bold' : 'bg-slate-900 text-slate-400 hover:text-white'" 
-              class="px-3 py-1.5 text-xs rounded-xl whitespace-nowrap transition"
-            >
-              {{ cat }}
-            </button>
-          </div>
-        </div>
+    <!-- 2. STOCK SCREEN -->
+    <div v-show="activeTab === 'inventory'" class="space-y-3">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xs font-black uppercase tracking-wider text-slate-300">{{ t('live_inventory') }}</h2>
+        <button @click="triggerGuardedAction(openAddStockModal)" class="px-3 py-1.5 bg-emerald-500 text-slate-950 font-black text-xs rounded-xl shadow-md">
+          + નવી વસ્તુ
+        </button>
+      </div>
 
-        <!-- Catalog Grid -->
-        <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 pr-1 no-scrollbar">
-          <div 
-            v-for="p in visibleProducts" 
-            :key="p.id" 
-            @click="addItemToCart(p)"
-            :class="p.stock <= 0 ? 'opacity-40 pointer-events-none border-red-500/20 bg-slate-900/30' : 'hover:border-teal-500/60 hover:bg-slate-800/80 cursor-pointer active:scale-95 bg-slate-900/60'"
-            class="p-3 rounded-2xl border border-slate-800/80 flex flex-col justify-between transition shadow-lg group relative overflow-hidden"
-          >
-            <div>
-              <div class="flex items-center justify-between text-[10px] text-slate-500 mb-1">
-                <span>#{{ p.code }}</span>
-                <span :class="p.stock <= 5 ? 'text-rose-400 font-bold' : 'text-slate-400'">
-                  {{ t('stock') }}: {{ p.stock }}
-                </span>
-              </div>
-              <h3 class="font-bold text-xs text-slate-100 group-hover:text-teal-300 transition line-clamp-2 leading-snug">
-                {{ p.name[lang] }}
-              </h3>
-            </div>
-            
-            <div class="mt-3 flex items-baseline justify-between pt-2 border-t border-slate-800">
-              <span class="text-sm font-extrabold text-teal-400">₹{{ p.price.toFixed(2) }}</span>
-              <span class="text-[10px] text-slate-500">GST {{ p.taxRate }}%</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Right Panel: Order Register & Payment Checkout -->
-      <section class="w-88 sm:w-96 bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl z-10">
-        <div class="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+      <div class="space-y-2">
+        <div v-for="item in inventoryList" :key="item.id" class="p-3 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between">
           <div>
-            <h2 class="font-extrabold text-xs text-white uppercase tracking-wider">{{ t('active_cart') }}</h2>
-            <p class="text-[10px] text-slate-400">{{ activeCart.length }} {{ t('items_selected') }}</p>
-          </div>
-          <div class="flex items-center gap-1">
-            <button 
-              @click="parkActiveOrder" 
-              :disabled="!activeCart.length"
-              class="px-2 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 rounded-lg transition"
-            >
-              ⏸️ {{ t('park_bill') }}
-            </button>
-            <button 
-              @click="clearActiveCart" 
-              :disabled="!activeCart.length"
-              class="px-2 py-1 text-[11px] bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 text-rose-400 rounded-lg transition"
-            >
-              🗑️
-            </button>
-          </div>
-        </div>
-
-        <!-- Cart Items List -->
-        <div class="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
-          <div v-if="!activeCart.length" class="h-full flex flex-col items-center justify-center text-slate-600 gap-2">
-            <span class="text-3xl opacity-30">🛒</span>
-            <p class="text-xs">{{ t('cart_empty') }}</p>
-          </div>
-
-          <div 
-            v-for="(line, idx) in activeCart" 
-            :key="line.id" 
-            class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between gap-2"
-          >
-            <div class="flex-1 min-w-0">
-              <h4 class="font-bold text-xs text-slate-200 truncate">{{ line.name[lang] }}</h4>
-              <div class="flex items-center gap-2 mt-0.5">
-                <span class="text-[10px] text-slate-500">₹{{ line.price.toFixed(2) }} ({{ line.taxRate }}%)</span>
-                <!-- In-Line Price Override Trigger -->
-                <button @click="openPriceOverrideModal(idx)" class="text-[9px] font-bold text-teal-400 hover:underline">
-                  [{{ t('override_rate') }}]
-                </button>
-              </div>
-            </div>
-
-            <!-- Quantity Controls -->
-            <div class="flex items-center gap-1.5">
-              <div class="flex items-center bg-slate-800 rounded-lg border border-slate-700/80 p-0.5">
-                <button @click="updateLineQty(idx, -1)" class="w-6 h-6 flex items-center justify-center text-xs font-bold text-slate-400 hover:text-white rounded">-</button>
-                <span class="w-6 text-center text-xs font-extrabold text-white">{{ line.qty }}</span>
-                <button @click="updateLineQty(idx, 1)" class="w-6 h-6 flex items-center justify-center text-xs font-bold text-slate-400 hover:text-white rounded">+</button>
-              </div>
-              <span class="w-16 text-right font-extrabold text-xs text-teal-400">
-                ₹{{ ((line.price * line.qty) * (1 + line.taxRate / 100)).toFixed(2) }}
+            <span class="text-[10px] text-slate-500 font-mono">#{{ item.code }}</span>
+            <h4 class="text-xs font-bold text-white">{{ item.name[lang] }}</h4>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-xs font-extrabold text-emerald-400">₹{{ item.price.toFixed(2) }}</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full" :class="item.stock <= 5 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30 font-bold' : 'bg-slate-800 text-slate-400'">
+                સ્ટોક: {{ item.stock }}
               </span>
             </div>
           </div>
-        </div>
-
-        <!-- Financial Computations & Settlement -->
-        <div class="p-3 bg-slate-950 border-t border-slate-800 space-y-2.5">
-          <div class="space-y-1 text-xs">
-            <div class="flex justify-between text-slate-400">
-              <span>{{ t('taxable_amt') }}</span>
-              <span>₹{{ subtotalTaxable.toFixed(2) }}</span>
-            </div>
-            <div class="flex justify-between text-slate-400">
-              <span>{{ t('gst_total') }}</span>
-              <span>₹{{ totalGst.toFixed(2) }}</span>
-            </div>
-            <div class="flex justify-between text-slate-500 text-[11px]">
-              <span>{{ t('round_off') }}</span>
-              <span>{{ roundOffValue >= 0 ? '+' : '' }}{{ roundOffValue.toFixed(2) }}</span>
-            </div>
-            <div class="flex justify-between text-sm font-extrabold text-white pt-1.5 border-t border-slate-800">
-              <span>{{ t('grand_total') }}</span>
-              <span class="text-teal-300 text-base">₹{{ netPayableTotal.toFixed(2) }}</span>
-            </div>
-          </div>
-
-          <!-- Payment Mode Selection -->
-          <div class="grid grid-cols-4 gap-1 pt-1">
-            <button 
-              v-for="mode in ['cash', 'upi', 'card', 'khata']" 
-              :key="mode" 
-              @click="activePayMode = mode"
-              :class="activePayMode === mode ? 'bg-teal-500 text-slate-950 font-black shadow-md shadow-teal-500/20' : 'bg-slate-800 text-slate-400 hover:text-white'"
-              class="py-1.5 text-[11px] rounded-lg font-bold transition capitalize"
-            >
-              {{ t('pay_' + mode) }}
-            </button>
-          </div>
-
-          <!-- Khata Details Inputs -->
-          <div v-if="activePayMode === 'khata'" class="space-y-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800">
-            <input 
-              v-model="khataCustomerPhone" 
-              type="tel" 
-              placeholder="Customer Phone (10 digits)" 
-              class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            />
-            <input 
-              v-model="khataCustomerName" 
-              type="text" 
-              placeholder="Customer Name" 
-              class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500"
-            />
-          </div>
-
-          <!-- Dynamic UPI QR Mini Preview -->
-          <div v-if="activePayMode === 'upi'" class="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-            <div class="text-[11px] text-slate-400">
-              <span class="font-bold text-white block">{{ config.upiId }}</span>
-              Scan via PhonePe, GPay, Paytm
-            </div>
-            <canvas id="upiQrMiniCanvas" class="w-12 h-12 bg-white rounded border border-white"></canvas>
-          </div>
-
-          <!-- Complete Checkout Button -->
-          <button 
-            @click="executeCheckout" 
-            :disabled="!activeCart.length || !isShiftOpen"
-            class="w-full py-3 bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-400 hover:to-emerald-300 disabled:opacity-30 disabled:pointer-events-none text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-teal-500/20 transition active:scale-[0.99] flex items-center justify-center gap-2"
-          >
-            <span>⚡</span>
-            <span>{{ t('checkout_print') }}</span>
-          </button>
-        </div>
-      </section>
-    </div>
-
-    <!-- ==================================================================== -->
-    <!-- TAB 2: PARKED ORDERS REPOSITORY                                      -->
-    <!-- ==================================================================== -->
-    <div v-show="activeTab === 'parked'" class="flex-1 p-6 overflow-y-auto no-scrollbar">
-      <div class="max-w-4xl mx-auto space-y-4">
-        <h2 class="text-sm font-extrabold text-white uppercase tracking-wider">{{ t('parked_bills') }}</h2>
-        <div v-if="!parkedCarts.length" class="text-center py-16 text-slate-500 text-xs">
-          {{ t('no_parked_bills') }}
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div v-for="(pCart, idx) in parkedCarts" :key="idx" class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex justify-between items-center">
-            <div>
-              <span class="text-[10px] text-teal-400 font-bold block mb-1">Ticket #{{ idx + 1 }} • {{ pCart.timestamp }}</span>
-              <p class="font-extrabold text-white text-xs">{{ pCart.items.length }} Items</p>
-              <p class="text-xs text-slate-400 mt-1">Total Valuation: ₹{{ pCart.total.toFixed(2) }}</p>
-            </div>
-            <button @click="restoreParkedCart(idx)" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition">
-              {{ t('restore_bill') }}
-            </button>
+          <div class="flex gap-1.5">
+            <button @click="triggerGuardedAction(() => replenishStock(item.id, 10))" class="px-2.5 py-1.5 bg-slate-800 border border-slate-700 text-xs font-bold text-white rounded-xl">+10</button>
+            <button @click="triggerGuardedAction(() => replenishStock(item.id, 50))" class="px-2.5 py-1.5 bg-slate-800 border border-slate-700 text-xs font-bold text-white rounded-xl">+50</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ==================================================================== -->
-    <!-- TAB 3: INVENTORY CONTROLLER                                          -->
-    <!-- ==================================================================== -->
-    <div v-show="activeTab === 'inventory'" class="flex-1 p-6 overflow-y-auto no-scrollbar">
-      <div class="max-w-5xl mx-auto space-y-4">
-        <div class="flex justify-between items-center">
-          <h2 class="text-sm font-extrabold text-white uppercase tracking-wider">{{ t('live_inventory') }}</h2>
-          <button @click="triggerGuardedAction(openAddStockModal)" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition">
-            + {{ t('add_new_sku') }}
-          </button>
-        </div>
-
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold">
-              <tr>
-                <th class="p-3">SKU</th>
-                <th class="p-3">Item Name</th>
-                <th class="p-3">Rate</th>
-                <th class="p-3">GST %</th>
-                <th class="p-3">Stock Level</th>
-                <th class="p-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-800/60">
-              <tr v-for="item in inventoryList" :key="item.id" class="hover:bg-slate-800/40">
-                <td class="p-3 font-mono text-slate-400">#{{ item.code }}</td>
-                <td class="p-3 font-bold text-white">{{ item.name[lang] }}</td>
-                <td class="p-3 text-teal-400 font-bold">₹{{ item.price.toFixed(2) }}</td>
-                <td class="p-3 text-slate-400">{{ item.taxRate }}%</td>
-                <td class="p-3">
-                  <span :class="item.stock <= 5 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'" class="px-2 py-0.5 rounded-full text-[10px] font-bold">
-                    {{ item.stock }} Available
-                  </span>
-                </td>
-                <td class="p-3 text-right space-x-1">
-                  <button @click="triggerGuardedAction(() => replenishStock(item.id, 10))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold">+10</button>
-                  <button @click="triggerGuardedAction(() => replenishStock(item.id, 50))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold">+50</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+    <!-- 3. KHATA BOOK SCREEN -->
+    <div v-show="activeTab === 'khata'" class="space-y-3">
+      <h2 class="text-xs font-black uppercase tracking-wider text-slate-300">{{ t('customer_khata') }}</h2>
+      <div v-if="!khataLedgerList.length" class="text-center py-16 text-slate-500 text-xs">
+        કોઈ ગ્રાહકની ઉધારી બાકી નથી.
       </div>
-    </div>
-
-    <!-- ==================================================================== -->
-    <!-- TAB 4: CUSTOMER KHATA (CREDIT LEDGER)                                -->
-    <!-- ==================================================================== -->
-    <div v-show="activeTab === 'khata'" class="flex-1 p-6 overflow-y-auto no-scrollbar">
-      <div class="max-w-4xl mx-auto space-y-4">
-        <h2 class="text-sm font-extrabold text-white uppercase tracking-wider">{{ t('customer_khata') }}</h2>
-        <div v-if="!khataLedgerList.length" class="text-center py-16 text-slate-500 text-xs">
-          {{ t('no_khata_records') }}
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div v-for="customer in khataLedgerList" :key="customer.phone" class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex justify-between items-center">
-            <div>
-              <h4 class="font-extrabold text-white text-sm">{{ customer.name }}</h4>
-              <p class="text-xs text-slate-400 font-mono mt-0.5">📞 {{ customer.phone }}</p>
-              <p class="text-xs text-rose-400 font-extrabold mt-2">Outstanding: ₹{{ customer.balance.toFixed(2) }}</p>
-            </div>
-            <button @click="openSettleKhataModal(customer)" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition">
-              {{ t('settle_payment') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================================================================== -->
-    <!-- TAB 5: DAY-END Z-REPORT & SHIFT MANAGEMENT                           -->
-    <!-- ==================================================================== -->
-    <div v-show="activeTab === 'reports'" class="flex-1 p-6 overflow-y-auto no-scrollbar">
-      <div class="max-w-3xl mx-auto space-y-4">
-        <div class="flex justify-between items-center">
-          <h2 class="text-sm font-extrabold text-white uppercase tracking-wider">{{ t('shift_summary') }}</h2>
-          <div class="space-x-2">
-            <button 
-              @click="triggerGuardedAction(toggleShiftStatus)"
-              :class="isShiftOpen ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'"
-              class="px-3 py-1.5 rounded-xl border text-xs font-bold transition"
-            >
-              {{ isShiftOpen ? t('close_shift') : t('start_shift') }}
-            </button>
-            <button @click="exportDataBackup" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition">
-              💾 {{ t('export_backup') }}
-            </button>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-            <span class="text-[10px] text-slate-400 uppercase font-bold block">{{ t('total_sales') }}</span>
-            <span class="text-xl font-extrabold text-teal-400 mt-1 block">₹{{ lifetimeMetrics.totalSales.toFixed(2) }}</span>
-          </div>
-          <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-            <span class="text-[10px] text-slate-400 uppercase font-bold block">{{ t('invoices_issued') }}</span>
-            <span class="text-xl font-extrabold text-white mt-1 block">{{ lifetimeMetrics.invoicesCount }} Bills</span>
-          </div>
-          <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-            <span class="text-[10px] text-slate-400 uppercase font-bold block">{{ t('credit_outstanding') }}</span>
-            <span class="text-xl font-extrabold text-rose-400 mt-1 block">₹{{ lifetimeMetrics.khataDebt.toFixed(2) }}</span>
-          </div>
-        </div>
-
-        <!-- Invoices Log Table -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-          <h3 class="font-bold text-xs text-white uppercase mb-3">{{ t('recent_bills') }}</h3>
-          <div class="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
-            <div v-for="inv in recentInvoices" :key="inv.id" class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center text-xs">
-              <div>
-                <span class="font-bold text-white">#{{ inv.id }}</span>
-                <span class="text-slate-500 ml-2">{{ inv.timestamp.substring(11, 16) }} • {{ inv.mode.toUpperCase() }}</span>
-              </div>
-              <span class="font-extrabold text-teal-400">₹{{ inv.total.toFixed(2) }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==================================================================== -->
-    <!-- CUSTOM REACTIVE MODAL ENGINES (ZERO NATIVE POPUPS)                  -->
-    <!-- ==================================================================== -->
-
-    <!-- 1. SECURITY PIN PAD MODAL -->
-    <div v-if="pinPromptActive" class="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-80 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center">
-        <h3 class="font-bold text-sm text-white mb-1">{{ t('auth_required') }}</h3>
-        <p class="text-xs text-slate-400 mb-4">Enter Master Security PIN</p>
-        
-        <div class="w-full bg-slate-950 rounded-xl py-3 border border-slate-800 flex justify-center items-center mb-6 tracking-widest text-xl font-mono text-teal-400">
-          {{ enteredPin ? '•'.repeat(enteredPin.length) : '----' }}
-        </div>
-
-        <div class="grid grid-cols-3 gap-2 w-full">
-          <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click="appendPin(n)" class="h-12 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-lg transition">
-            {{ n }}
-          </button>
-          <button @click="enteredPin = ''" class="h-12 bg-rose-500/20 text-rose-300 font-bold rounded-xl text-sm transition">C</button>
-          <button @click="appendPin(0)" class="h-12 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-lg transition">0</button>
-          <button @click="submitPin" class="h-12 bg-teal-500 text-slate-950 font-black rounded-xl text-sm transition">OK</button>
-        </div>
-
-        <button @click="pinPromptActive = false; enteredPin = ''" class="mt-4 text-xs text-slate-500 hover:text-white">Cancel</button>
-      </div>
-    </div>
-
-    <!-- 2. PRICE OVERRIDE MODAL -->
-    <div v-if="activeModal === 'priceOverride'" class="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-80 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
-        <div>
-          <h3 class="font-bold text-sm text-white">{{ t('override_rate') }}</h3>
-          <p class="text-xs text-slate-400">{{ priceOverrideForm.name }}</p>
-        </div>
-        <div>
-          <label class="block text-[11px] text-slate-400 mb-1">New Unit Selling Price (₹)</label>
-          <input 
-            v-model.number="priceOverrideForm.newPrice" 
-            type="number" 
-            step="0.01"
-            class="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
-        </div>
-        <div class="flex gap-2">
-          <button @click="activeModal = null" class="flex-1 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition">Cancel</button>
-          <button @click="applyPriceOverride" class="flex-1 py-2 text-xs bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl transition">Apply</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. ADD NEW SKU MODAL -->
-    <div v-if="activeModal === 'addStock'" class="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-96 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-3">
-        <h3 class="font-bold text-sm text-white mb-2">{{ t('add_new_sku') }}</h3>
-        
-        <div>
-          <label class="block text-[11px] text-slate-400 mb-0.5">Product Name (English)</label>
-          <input v-model="newStockForm.nameEn" type="text" placeholder="e.g. Mustard Oil 1L" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
-        </div>
-        <div>
-          <label class="block text-[11px] text-slate-400 mb-0.5">Product Name (ગુજરાતી)</label>
-          <input v-model="newStockForm.nameGu" type="text" placeholder="e.g. રાયડો તેલ ૧ લીટર" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
-        </div>
-        <div class="grid grid-cols-2 gap-2">
+      <div class="space-y-2">
+        <div v-for="c in khataLedgerList" :key="c.phone" class="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between">
           <div>
-            <label class="block text-[11px] text-slate-400 mb-0.5">Rate (₹)</label>
-            <input v-model.number="newStockForm.price" type="number" step="0.5" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
+            <h4 class="text-xs font-bold text-white">{{ c.name }}</h4>
+            <p class="text-[11px] text-slate-400 font-mono">📞 {{ c.phone }}</p>
+            <p class="text-xs font-black text-rose-400 mt-1">બાકી રકમ: ₹{{ c.balance.toFixed(2) }}</p>
           </div>
-          <div>
-            <label class="block text-[11px] text-slate-400 mb-0.5">Initial Stock</label>
-            <input v-model.number="newStockForm.stock" type="number" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
-          </div>
-        </div>
-        <div>
-          <label class="block text-[11px] text-slate-400 mb-0.5">Category</label>
-          <input v-model="newStockForm.category" type="text" placeholder="Groceries" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
-        </div>
-
-        <div class="flex gap-2 pt-2">
-          <button @click="activeModal = null" class="flex-1 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition">Cancel</button>
-          <button @click="saveNewStock" class="flex-1 py-2 text-xs bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl transition">Save Item</button>
+          <button @click="openSettleKhataModal(c)" class="px-3 py-1.5 bg-emerald-500 text-slate-950 font-black text-xs rounded-xl shadow-md">
+            જમા લો
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- 4. KHATA SETTLEMENT MODAL -->
-    <div v-if="activeModal === 'settleKhata'" class="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-80 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
-        <div>
-          <h3 class="font-bold text-sm text-white">{{ t('settle_payment') }}</h3>
-          <p class="text-xs text-slate-400 mt-0.5">{{ khataSettleForm.name }} ({{ khataSettleForm.phone }})</p>
-          <p class="text-xs text-rose-400 font-extrabold mt-1">Total Outstanding: ₹{{ khataSettleForm.balance.toFixed(2) }}</p>
-        </div>
+    <!-- 4. AUDIT & REPORT SCREEN -->
+    <div v-show="activeTab === 'reports'" class="space-y-3">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xs font-black uppercase tracking-wider text-slate-300">દૈનિક હિસાબ રિપોર્ટ</h2>
+        <button @click="triggerGuardedAction(toggleShiftStatus)" :class="isShiftOpen ? 'bg-rose-500/10 text-rose-300 border-rose-500/30' : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'" class="px-3 py-1.5 border text-xs font-bold rounded-xl">
+          {{ isShiftOpen ? 'શિફ્ટ બંધ કરો' : 'નવી શિફ્ટ' }}
+        </button>
+      </div>
 
-        <div>
-          <label class="block text-[11px] text-slate-400 mb-1">Amount Received (₹)</label>
-          <input 
-            v-model.number="khataSettleForm.amount" 
-            type="number" 
-            step="0.01"
-            class="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
+      <div class="grid grid-cols-2 gap-2">
+        <div class="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl">
+          <span class="text-[10px] text-slate-400 font-bold block">કુલ વેચાણ</span>
+          <span class="text-base font-black text-emerald-400 mt-0.5 block">₹{{ lifetimeMetrics.totalSales.toFixed(2) }}</span>
         </div>
-
-        <div class="flex gap-2">
-          <button @click="khataSettleForm.amount = khataSettleForm.balance" class="w-full py-1.5 text-[11px] bg-slate-800 hover:bg-slate-700 text-teal-400 font-bold rounded-xl transition">
-            Settle Full Outstanding
-          </button>
+        <div class="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl">
+          <span class="text-[10px] text-slate-400 font-bold block">કુલ બિલ</span>
+          <span class="text-base font-black text-white mt-0.5 block">{{ lifetimeMetrics.invoicesCount }}</span>
         </div>
+      </div>
 
-        <div class="flex gap-2 pt-1">
-          <button @click="activeModal = null" class="flex-1 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition">Cancel</button>
-          <button @click="submitKhataSettlement" class="flex-1 py-2 text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition">Record</button>
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
+        <h3 class="text-xs font-bold text-white mb-2">તાજેતરના બિલ</h3>
+        <div class="space-y-1.5 max-h-60 overflow-y-auto no-scrollbar">
+          <div v-for="inv in recentInvoices" :key="inv.id" class="p-2 bg-slate-950 border border-slate-800/80 rounded-xl flex justify-between items-center text-xs">
+            <div>
+              <span class="font-bold text-white">#{{ inv.id }}</span>
+              <span class="text-slate-500 text-[10px] ml-1">{{ (inv.timestamp || '').substring(11, 16) }}</span>
+            </div>
+            <span class="font-black text-emerald-400">₹{{ inv.total.toFixed(2) }}</span>
+          </div>
         </div>
       </div>
     </div>
 
   </main>
+
+  <!-- ================= FLOATING MOBILE CART BAR ================= -->
+  <div v-if="activeCart.length && !cartDrawerOpen" class="fixed bottom-16 left-3 right-3 z-30 animate-bounce">
+    <div 
+      @click="cartDrawerOpen = true"
+      class="bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-between cursor-pointer active:scale-95 transition"
+    >
+      <div class="flex items-center gap-2">
+        <span class="text-lg">🛒</span>
+        <div>
+          <span class="text-xs font-black block leading-none">{{ activeCart.length }} વસ્તુઓ પસંદ કરી</span>
+          <span class="text-[10px] opacity-80">બિલ જોવા અહીં ક્લિક કરો</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-base font-black">₹{{ netPayableTotal.toFixed(2) }}</span>
+        <span class="bg-slate-950/20 px-2 py-1 rounded-lg text-xs font-black">આગળ 👉</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= BOTTOM NAVIGATION BAR ================= -->
+  <nav class="fixed bottom-0 left-0 right-0 h-14 bg-slate-900 border-t border-slate-800 flex items-center justify-around z-20 px-2">
+    <button 
+      v-for="tab in navigationTabs" 
+      :key="tab.id" 
+      @click="activeTab = tab.id"
+      :class="activeTab === tab.id ? 'text-emerald-400 font-black' : 'text-slate-400'"
+      class="flex flex-col items-center justify-center flex-1 py-1"
+    >
+      <span class="text-base">{{ tab.icon }}</span>
+      <span class="text-[10px] mt-0.5">{{ t(tab.key) }}</span>
+    </button>
+  </nav>
+
+  <!-- ================= CART / BILL SLIDE-UP MODAL ================= -->
+  <div v-if="cartDrawerOpen" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end">
+    <div class="bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <!-- Drawer Header -->
+      <div class="p-3.5 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+        <div>
+          <h2 class="text-xs font-black text-white">ચાલુ બિલ (Current Bill)</h2>
+          <p class="text-[10px] text-slate-400">{{ activeCart.length }} લાઇન</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="clearActiveCart(); cartDrawerOpen = false" class="text-rose-400 text-xs px-2 py-1 bg-rose-500/10 rounded-lg">ખાલી કરો</button>
+          <button @click="cartDrawerOpen = false" class="text-white text-base px-2 py-1 bg-slate-800 rounded-lg">&times;</button>
+        </div>
+      </div>
+
+      <!-- Item Rows -->
+      <div class="p-3 overflow-y-auto space-y-2 flex-1 no-scrollbar">
+        <div v-for="(line, idx) in activeCart" :key="line.id" class="p-2.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between">
+          <div class="flex-1 min-w-0 pr-2">
+            <h4 class="text-xs font-bold text-white truncate">{{ line.name[lang] }}</h4>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-[10px] text-slate-400">₹{{ line.price.toFixed(2) }}</span>
+              <button @click="openPriceOverrideModal(idx)" class="text-[9px] text-emerald-400 font-bold underline">[ભાવ બદલો]</button>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <div class="flex items-center bg-slate-800 rounded-lg p-0.5">
+              <button @click="updateLineQty(idx, -1)" class="w-6 h-6 flex items-center justify-center font-bold text-slate-300">-</button>
+              <span class="w-6 text-center text-xs font-black text-white">{{ line.qty }}</span>
+              <button @click="updateLineQty(idx, 1)" class="w-6 h-6 flex items-center justify-center font-bold text-slate-300">+</button>
+            </div>
+            <span class="w-14 text-right text-xs font-black text-emerald-400">
+              ₹{{ ((line.price * line.qty) * (1 + line.taxRate / 100)).toFixed(2) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment & Grand Total -->
+      <div class="p-3 bg-slate-950 border-t border-slate-800 space-y-2.5">
+        <div class="flex justify-between items-baseline">
+          <span class="text-xs text-slate-400">ચૂકવવાપાત્ર રકમ (Net Total):</span>
+          <span class="text-xl font-black text-emerald-400">₹{{ netPayableTotal.toFixed(2) }}</span>
+        </div>
+
+        <!-- Mode Buttons -->
+        <div class="grid grid-cols-4 gap-1">
+          <button 
+            v-for="mode in ['cash', 'upi', 'card', 'khata']" 
+            :key="mode" 
+            @click="setPaymentMode(mode)"
+            :class="activePayMode === mode ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-400'"
+            class="py-2 text-[11px] rounded-xl font-bold uppercase transition"
+          >
+            {{ t('pay_' + mode) }}
+          </button>
+        </div>
+
+        <!-- Khata Phone -->
+        <div v-if="activePayMode === 'khata'" class="space-y-1.5 p-2 bg-slate-900 border border-slate-800 rounded-xl">
+          <input v-model="khataCustomerPhone" type="tel" placeholder="ગ્રાહકનો મોબાઈલ નંબર" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white" />
+          <input v-model="khataCustomerName" type="text" placeholder="ગ્રાહકનું નામ" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white" />
+        </div>
+
+        <!-- Dynamic UPI QR -->
+        <div v-if="activePayMode === 'upi'" class="p-2 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+          <div class="text-[11px] text-slate-400">
+            <span class="text-white font-bold block">{{ config.upiId }}</span>
+            PhonePe, GPay, Paytm થી સ્કેન કરો
+          </div>
+          <canvas id="upiQrMiniCanvas" class="w-14 h-14 bg-white rounded-lg"></canvas>
+        </div>
+
+        <!-- Checkout Button -->
+        <button 
+          @click="executeCheckout"
+          class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-400 active:scale-95 transition text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2"
+        >
+          <span>⚡ બિલ બનાવો અને પ્રિન્ટ કરો</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= PIN GUARD MODAL ================= -->
+  <div v-if="pinPromptActive" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-72 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl flex flex-col items-center">
+      <h3 class="font-bold text-xs text-white mb-1">સિક્યોરિટી પિન દાખલ કરો</h3>
+      <div class="w-full bg-slate-950 rounded-xl py-2.5 border border-slate-800 flex justify-center text-xl font-mono text-emerald-400 mb-4 tracking-widest">
+        {{ enteredPin ? '•'.repeat(enteredPin.length) : '----' }}
+      </div>
+      <div class="grid grid-cols-3 gap-2 w-full">
+        <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click="appendPin(n)" class="h-11 bg-slate-800 text-white font-bold rounded-xl">{{ n }}</button>
+        <button @click="enteredPin = ''" class="h-11 bg-rose-500/20 text-rose-300 font-bold rounded-xl text-xs">C</button>
+        <button @click="appendPin(0)" class="h-11 bg-slate-800 text-white font-bold rounded-xl">0</button>
+        <button @click="submitPin" class="h-11 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs">OK</button>
+      </div>
+      <button @click="pinPromptActive = false; enteredPin = ''" class="mt-3 text-xs text-slate-500">રદ કરો</button>
+    </div>
+  </div>
+
+  <!-- ================= PRICE OVERRIDE MODAL ================= -->
+  <div v-if="activeModal === 'priceOverride'" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-72 bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3">
+      <h3 class="font-bold text-xs text-white">ભાવ બદલો: {{ priceOverrideForm.name }}</h3>
+      <input v-model.number="priceOverrideForm.newPrice" type="number" step="0.5" class="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500" placeholder="નવો ભાવ (₹)">
+      <div class="flex gap-2">
+        <button @click="savePriceOverride" class="flex-1 py-2 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs">સાચવો</button>
+        <button @click="activeModal = null" class="flex-1 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs">રદ કરો</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ADD STOCK MODAL ================= -->
+  <div v-if="activeModal === 'addStock'" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-80 bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3">
+      <h3 class="font-bold text-xs text-white">નવી વસ્તુ ઉમેરો (Add Item)</h3>
+      <input v-model="newProductForm.code" type="text" placeholder="કોડ / બારકોડ" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
+      <input v-model="newProductForm.nameGu" type="text" placeholder="નામ (ગુજરાતી)" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
+      <input v-model="newProductForm.nameEn" type="text" placeholder="Name (English)" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
+      <div class="grid grid-cols-2 gap-2">
+        <input v-model.number="newProductForm.price" type="number" placeholder="ભાવ (₹)" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
+        <input v-model.number="newProductForm.stock" type="number" placeholder="શરૂઆતનો સ્ટોક" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
+      </div>
+      <select v-model="newProductForm.category" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
+        <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+      </select>
+      <div class="flex gap-2 pt-1">
+        <button @click="addNewProduct" class="flex-1 py-2 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs">ઉમેરો</button>
+        <button @click="activeModal = null" class="flex-1 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs">રદ કરો</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SETTLE KHATA MODAL ================= -->
+  <div v-if="activeModal === 'settleKhata'" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-72 bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3">
+      <h3 class="font-bold text-xs text-white">ખાતું સરભર કરો</h3>
+      <p class="text-xs text-slate-400">{{ settleKhataForm.name }} (બાકી: ₹{{ settleKhataForm.balance.toFixed(2) }})</p>
+      <input v-model.number="settleKhataForm.amount" type="number" placeholder="જમા રકમ (₹)" class="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500">
+      <div class="flex gap-2">
+        <button @click="executeSettleKhata" class="flex-1 py-2 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs">જમા કરો</button>
+        <button @click="activeModal = null" class="flex-1 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs">રદ કરો</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
-<!-- CANVAS FOR 1-BIT MONOCHROME ESC/POS RASTER BITMAPS -->
-<canvas id="thermalRasterCanvas" width="384" height="800" class="hidden"></canvas>
-
+<!-- ================= APPLICATION SCRIPT ================= -->
 <script>
-// ============================================================================
-// 1. DATA LAYER (DEXIE INDEXED-DB PERSISTENCE)
-// ============================================================================
-const db = new Dexie('UnifiedPosDb');
+const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+// Dexie IndexedDB Initialization
+const db = new Dexie('SmartRetailPOS_DB');
 db.version(1).stores({
-  products: 'id, code, category, stock',
-  invoices: 'id, timestamp, total, mode',
-  khata: 'phone, name, balance',
-  shift: 'id, active, floatCash, timestamp'
+  products: '++id, code, category, stock',
+  invoices: '++id, timestamp, total',
+  khata: 'phone, name, balance'
 });
 
-const DEFAULT_INVENTORY = [
-  { id: 1, code: '890103001', category: 'Groceries', name: { en: 'Gujarat Gold Tea 500g', hi: 'गुजरात गोल्ड चाय 500g', gu: 'ગુજરાત ગોલ્ડ ચા ૫૦૦ ગ્રામ' }, price: 280.0, taxRate: 5, stock: 50 },
-  { id: 2, code: '890103002', category: 'Oils', name: { en: 'Tirupati Cottonseed Oil 1L', hi: 'तिरुपति कपासिया तेल 1L', gu: 'તિરુપતિ કપાસિયા તેલ ૧ લીટર' }, price: 145.0, taxRate: 5, stock: 35 },
-  { id: 3, code: '890103003', category: 'Grains', name: { en: 'HMT Kolam Rice 5kg', hi: 'एचएमटी कोलम चावल 5kg', gu: 'એચએમટી કોલમ ચોખા ૫ કિલો' }, price: 340.0, taxRate: 0, stock: 20 },
-  { id: 4, code: '890103004', category: 'Dairy', name: { en: 'Amul Butter 500g', hi: 'अमूल मक्खन 500g', gu: 'અમૂલ બટર ૫૦૦ ગ્રામ' }, price: 275.0, taxRate: 12, stock: 25 },
-  { id: 5, code: '890103005', category: 'Spices', name: { en: 'Everest Turmeric 200g', hi: 'एवरेस्ट हल्दी 200g', gu: 'એવરેસ્ટ હળદર ૨૦૦ ગ્રામ' }, price: 68.0, taxRate: 5, stock: 40 },
-  { id: 6, code: '890103006', category: 'Beverages', name: { en: 'Bisleri Water 1L', hi: 'बिसलेरी पानी 1L', gu: 'બિસ્લેરી પાણી ૧ લીટર' }, price: 20.0, taxRate: 18, stock: 120 }
+const defaultProducts = [
+  { code: '101', name: { gu: 'કપાસિયા તેલ (૧ લિટર)', hi: 'कपासिया तेल (1L)', en: 'Cottonseed Oil (1L)' }, price: 140.00, stock: 24, category: 'કરિયાણું', taxRate: 5 },
+  { code: '102', name: { gu: 'તુવેર દાળ (૧ કિલો)', hi: 'तुवर दाल (1kg)', en: 'Toor Dal (1kg)' }, price: 165.00, stock: 12, category: 'કરિયાણું', taxRate: 0 },
+  { code: '103', name: { gu: 'વાઘ બકરી ચા (૨૫૦ ગ્રા)', hi: 'वाघ बकरी चाय (250g)', en: 'Wagh Bakri Tea (250g)' }, price: 135.00, stock: 4, category: 'પીણાં', taxRate: 5 },
+  { code: '104', name: { gu: 'અમૂલ તાઝા દૂધ (૫૦૦ મિલી)', hi: 'अमुल ताजा दूध (500ml)', en: 'Amul Taaza Milk (500ml)' }, price: 27.00, stock: 40, category: 'ડેરી', taxRate: 0 },
+  { code: '105', name: { gu: 'દેશી ગોળ (૧ કિલો)', hi: 'देसी गुड़ (1kg)', en: 'Desi Jaggery (1kg)' }, price: 60.00, stock: 18, category: 'કરિયાણું', taxRate: 0 },
+  { code: '106', name: { gu: 'જીરું પાઉડર (૧૦૦ ગ્રા)', hi: 'जीरा पाउडर (100g)', en: 'Cumin Powder (100g)' }, price: 45.00, stock: 3, category: 'મસાલા', taxRate: 5 }
 ];
 
-// ============================================================================
-// 2. COMPLETE TRILINGUAL LEXICON (ENGLISH, HINDI, GUJARATI)
-// ============================================================================
-const lexicon = {
-  en: {
-    tab_pos: 'Counter', tab_parked: 'Parked', tab_inventory: 'Stock', tab_khata: 'Khata', tab_reports: 'Audit',
-    search_placeholder: 'Search product, SKU or scan barcode...',
-    cat_all: 'All Categories', stock: 'Stock', active_cart: 'Current Bill', items_selected: 'lines',
-    park_bill: 'Hold', cart_empty: 'Cart is empty. Tap items to add.', taxable_amt: 'Taxable Value',
-    gst_total: 'Total GST', round_off: 'Round Off', grand_total: 'Net Total', pay_cash: 'Cash',
-    pay_upi: 'UPI QR', pay_card: 'Card', pay_khata: 'Khata', checkout_print: 'Print Receipt & Complete',
-    printer_online: 'Printer Connected', connect_printer: 'Pair Thermal Printer', parked_bills: 'Held Bills Queue',
-    no_parked_bills: 'No held orders currently.', restore_bill: 'Resume Bill', live_inventory: 'Live Inventory List',
-    add_new_sku: 'Add Product', customer_khata: 'Customer Khata Book', no_khata_records: 'No outstanding customer debts.',
-    settle_payment: 'Receive Payment', shift_summary: 'Day-End Audit (Z-Report)', total_sales: 'Lifetime Turnover',
-    invoices_issued: 'Invoices Cleared', credit_outstanding: 'Market Credit Due', recent_bills: 'Recent Transactions',
-    export_backup: 'Export JSON Backup', bill_success: 'Invoice Generated: #', override_rate: 'Edit Rate',
-    auth_required: 'Security PIN Guard', shift_open: 'SHIFT ACTIVE', shift_closed: 'SHIFT CLOSED',
-    close_shift: 'Close Shift', start_shift: 'Start Fresh Shift', scan_barcode: 'Camera Scan', stop_camera: 'Stop Camera'
+const dictionary = {
+  gu: {
+    search_placeholder: 'વસ્તુ અથવા બારકોડ શોધો...',
+    cat_all: 'બધું',
+    live_inventory: 'લાઈવ ઇન્વેન્ટરી અને સ્ટોક',
+    customer_khata: 'ગ્રાહક ખાતાવહી (ઉધારી)',
+    pay_cash: 'રોકડ',
+    pay_upi: 'UPI',
+    pay_card: 'કાર્ડ',
+    pay_khata: 'ઉધારી',
+    nav_pos: 'કાઉન્ટર',
+    nav_inventory: 'સ્ટોક',
+    nav_khata: 'ખાતાવહી',
+    nav_reports: 'હિસાબ'
   },
   hi: {
-    tab_pos: 'बिलिंग काउंटर', tab_parked: 'पार्क बिल', tab_inventory: 'स्टॉक सूची', tab_khata: 'उधार खाता', tab_reports: 'रिपोर्ट्स',
-    search_placeholder: 'सामान खोजें या बारकोड स्कैन करें...',
-    cat_all: 'सभी श्रेणियां', stock: 'स्टॉक', active_cart: 'वर्तमान बिल', items_selected: 'आइटम',
-    park_bill: 'होल्ड करें', cart_empty: 'कार्ट खाली है। सामान जोड़ें।', taxable_amt: 'कर योग्य मूल्य',
-    gst_total: 'कुल जीएसटी', round_off: 'राउंड ऑफ', grand_total: 'कुल देय राशि', pay_cash: 'नकद',
-    pay_upi: 'यूपीआई QR', pay_card: 'कार्ड', pay_khata: 'उधार', checkout_print: 'बिल बनाएं और प्रिंट करें',
-    printer_online: 'प्रिंटर कनेक्टेड', connect_printer: 'प्रिंटर जोड़ें', parked_bills: 'होल्ड किए गए बिल',
-    no_parked_bills: 'कोई होल्ड बिल नहीं है।', restore_bill: 'बिल वापस लाएं', live_inventory: 'लाइव स्टॉक रजिस्टर',
-    add_new_sku: 'नया सामान जोड़ें', customer_khata: 'ग्राहक उधार खाता', no_khata_records: 'कोई बकाया उधारी नहीं है।',
-    settle_payment: 'जमा प्राप्त करें', shift_summary: 'डे-एंड ऑडिट (Z-रिपोर्ट)', total_sales: 'कुल बिक्री',
-    invoices_issued: 'कुल बने बिल', credit_outstanding: 'बाजार उधारी', recent_bills: 'हाल के बिल',
-    export_backup: 'डेटा बैकअप लें', bill_success: 'बिल सफलतापूर्वक बना: #', override_rate: 'भाव बदलें',
-    auth_required: 'सुरक्षा पिन आवश्यक', shift_open: 'शिफ्ट चालू', shift_closed: 'शिफ्ट बंद',
-    close_shift: 'शिफ्ट बंद करें', start_shift: 'नई शिफ्ट शुरू करें', scan_barcode: 'कैमरा स्कैनर', stop_camera: 'कैमरा बंद करें'
+    search_placeholder: 'सामान या बारकोड खोजें...',
+    cat_all: 'सभी',
+    live_inventory: 'लाइव इन्वेंटरी और स्टॉक',
+    customer_khata: 'ग्राहक खाता बही (उधार)',
+    pay_cash: 'नकद',
+    pay_upi: 'UPI',
+    pay_card: 'कार्ड',
+    pay_khata: 'उधार',
+    nav_pos: 'काउंटर',
+    nav_inventory: 'स्टॉक',
+    nav_khata: 'खाता',
+    nav_reports: 'रिपोर्ट'
   },
-  gu: {
-    tab_pos: 'બિલિંગ કાઉન્ટર', tab_parked: 'હોલ્ડ બિલ', tab_inventory: 'હાજર સ્ટોક', tab_khata: 'ઉધાર ચોપડો', tab_reports: 'હિસાબ રિપોર્ટ',
-    search_placeholder: 'વસ્તુ શોધો અથવા બારકોડ સ્કેન કરો...',
-    cat_all: 'બધી કેટેગરી', stock: 'સ્ટોક', active_cart: 'ચાલુ બિલ', items_selected: 'વસ્તુઓ',
-    park_bill: 'હોલ્ડ કરો', cart_empty: 'કાર્ટ ખાલી છે. વસ્તુ ઉમેરો.', taxable_amt: 'કરપાત્ર રકમ',
-    gst_total: 'કુલ જીએસટી', round_off: 'રાઉન્ડ ઓફ', grand_total: 'કુલ ચોખ્ખી રકમ', pay_cash: 'રોકડ',
-    pay_upi: 'યુપીઆઈ QR', pay_card: 'કાર્ડ મશીન', pay_khata: 'ઉધાર ખાતું', checkout_print: 'બિલ પ્રિન્ટ કરો અને સેવ કરો',
-    printer_online: 'પ્રિન્ટર તૈયાર છે', connect_printer: 'પ્રિન્ટર જોડો', parked_bills: 'હોલ્ડ કરેલા બિલો',
-    no_parked_bills: 'કોઈ બિલ હોલ્ડ પર નથી.', restore_bill: 'બિલ પાછું લાવો', live_inventory: 'લાઈવ સ્ટોક રજીસ્ટર',
-    add_new_sku: 'નવી વસ્તુ ઉમેરો', customer_khata: 'ગ્રાહક ઉધાર ચોપડો', no_khata_records: 'કોઈ બાકી ઉધારી નથી.',
-    settle_payment: 'ઉધારી જમા કરો', shift_summary: 'ડે-એન્ડ ઓડિટ (Z-રિપોર્ટ)', total_sales: 'કુલ વેચાણ ટર્નઓવર',
-    invoices_issued: 'કુલ બનેલા બિલ', credit_outstanding: 'બજારમાં બાકી ઉધારી', recent_bills: 'તાજેતરના બિલ',
-    export_backup: 'બેકઅપ ડાઉનલોડ કરો', bill_success: 'બિલ સેવ થઈ ગયું: #', override_rate: 'ભાવ સુધારો',
-    auth_required: 'સિક્યોરિટી પિન જરૂરી', shift_open: 'શિફ્ટ ચાલુ છે', shift_closed: 'શિફ્ટ બંધ છે',
-    close_shift: 'શિફ્ટ પૂર્ણ કરો', start_shift: 'નવી શિફ્ટ શરૂ કરો', scan_barcode: 'કેમેરા સ્કેનર', stop_camera: 'કેમેરા બંધ કરો'
+  en: {
+    search_placeholder: 'Search product or barcode...',
+    cat_all: 'All',
+    live_inventory: 'Live Inventory & Stock',
+    customer_khata: 'Customer Ledger (Khata)',
+    pay_cash: 'Cash',
+    pay_upi: 'UPI',
+    pay_card: 'Card',
+    pay_khata: 'Credit',
+    nav_pos: 'Counter',
+    nav_inventory: 'Stock',
+    nav_khata: 'Khata',
+    nav_reports: 'Reports'
   }
 };
 
-// ============================================================================
-// 3. HARDWARE ESC/POS RASTERIZER (NATIVE INDIC SCRIPT ENGINE)
-// ============================================================================
-class EscPosThermalRasterizer {
-  static async renderReceiptToRasterBytes({ config, invoiceId, items, totals, payMode, lang }) {
-    const canvas = document.getElementById('thermalRasterCanvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    
-    const width = 384; // Standard 58mm thermal dot width
-    const calculatedHeight = 240 + (items.length * 44) + 260;
-    canvas.width = width;
-    canvas.height = calculatedHeight;
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, width, calculatedHeight);
-    ctx.fillStyle = '#000000';
-    ctx.textBaseline = 'top';
-
-    // Header
-    ctx.font = 'bold 20px "Noto Sans Gujarati", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(config.storeName, width / 2, 10);
-
-    ctx.font = '12px "Noto Sans Gujarati", sans-serif';
-    ctx.fillText(config.address, width / 2, 38);
-    ctx.fillText(`GSTIN: ${config.gstin} | MO: ${config.phone}`, width / 2, 56);
-
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.setLineDash([4, 2]);
-    ctx.moveTo(10, 78);
-    ctx.lineTo(width - 10, 78);
-    ctx.stroke();
-
-    // Invoice Details
-    ctx.textAlign = 'left';
-    ctx.font = '12px "Noto Sans Gujarati", sans-serif';
-    ctx.fillText(`Invoice: #${invoiceId}`, 10, 86);
-    ctx.textAlign = 'right';
-    ctx.fillText(new Date().toLocaleDateString('en-IN'), width - 10, 86);
-
-    ctx.beginPath();
-    ctx.moveTo(10, 106);
-    ctx.lineTo(width - 10, 106);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Line Items
-    let cursorY = 116;
-    for (const item of items) {
-      ctx.textAlign = 'left';
-      ctx.font = 'bold 13px "Noto Sans Gujarati", sans-serif';
-      const localizedName = item.name[lang] || item.name.en;
-      ctx.fillText(localizedName, 10, cursorY);
-
-      ctx.font = '12px "Noto Sans Gujarati", sans-serif';
-      ctx.fillText(`${item.qty} x Rs.${item.price.toFixed(2)} (${item.taxRate}% GST)`, 10, cursorY + 18);
-
-      ctx.textAlign = 'right';
-      ctx.font = 'bold 13px "Noto Sans Gujarati", sans-serif';
-      const itemGross = (item.price * item.qty) * (1 + item.taxRate / 100);
-      ctx.fillText(`Rs.${itemGross.toFixed(2)}`, width - 10, cursorY + 18);
-
-      cursorY += 40;
-    }
-
-    // Dividers & Totals
-    ctx.beginPath();
-    ctx.setLineDash([4, 2]);
-    ctx.moveTo(10, cursorY);
-    ctx.lineTo(width - 10, cursorY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    cursorY += 8;
-
-    ctx.textAlign = 'left';
-    ctx.font = '12px "Noto Sans Gujarati", sans-serif';
-    ctx.fillText('Taxable Subtotal:', 10, cursorY);
-    ctx.textAlign = 'right';
-    ctx.fillText(`Rs.${totals.taxable.toFixed(2)}`, width - 10, cursorY);
-    cursorY += 18;
-
-    ctx.textAlign = 'left';
-    ctx.fillText('Total GST Output:', 10, cursorY);
-    ctx.textAlign = 'right';
-    ctx.fillText(`Rs.${totals.gst.toFixed(2)}`, width - 10, cursorY);
-    cursorY += 18;
-
-    ctx.textAlign = 'left';
-    ctx.font = 'bold 16px "Noto Sans Gujarati", sans-serif';
-    ctx.fillText('NET TOTAL:', 10, cursorY);
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 18px "Noto Sans Gujarati", sans-serif';
-    ctx.fillText(`Rs.${totals.net.toFixed(2)}`, width - 10, cursorY);
-    cursorY += 28;
-
-    ctx.textAlign = 'center';
-    ctx.font = '12px "Noto Sans Gujarati", sans-serif';
-    ctx.fillText(`Payment Mode: ${payMode.toUpperCase()}`, width / 2, cursorY);
-    cursorY += 20;
-
-    // Footer
-    ctx.fillText('આભાર! ફરી પધારશો | Thank You!', width / 2, cursorY);
-
-    // ESC/POS GS v 0 1-bit Monochrome Encoding
-    const imgData = ctx.getImageData(0, 0, width, calculatedHeight);
-    const rgba = imgData.data;
-    const widthBytes = width / 8;
-    const rasterBytes = [];
-
-    // Initialize: ESC @
-    rasterBytes.push(0x1B, 0x40);
-
-    // GS v 0 0 xL xH yL yH
-    const yL = calculatedHeight % 256;
-    const yH = Math.floor(calculatedHeight / 256);
-    rasterBytes.push(0x1D, 0x76, 0x30, 0x00, widthBytes % 256, Math.floor(widthBytes / 256), yL, yH);
-
-    for (let y = 0; y < calculatedHeight; y++) {
-      for (let xByte = 0; xByte < widthBytes; xByte++) {
-        let byteVal = 0;
-        for (let bit = 0; bit < 8; bit++) {
-          const x = (xByte * 8) + bit;
-          const offset = (y * width + x) * 4;
-          const r = rgba[offset];
-          const g = rgba[offset + 1];
-          const b = rgba[offset + 2];
-          const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
-          if (luminance < 128) {
-            byteVal |= (1 << (7 - bit));
-          }
-        }
-        rasterBytes.push(byteVal);
-      }
-    }
-
-    // Feed lines & cut command: ESC d 3 + GS V 66 0
-    rasterBytes.push(0x1B, 0x64, 0x03, 0x1D, 0x56, 0x42, 0x00);
-    // Standard Javascript Uint8Array (Resolves runtime crash)
-    return new Uint8Array(rasterBytes);
-  }
-}
-
-// ============================================================================
-// 4. VUE 3 APPLICATION LOGIC CONTROLLER
-// ============================================================================
-const { createApp, ref, computed, onMounted, nextTick } = Vue;
-
 createApp({
   setup() {
+    const config = ref({
+      storeName: 'શ્રી ગણેશ સુપર સ્ટોર',
+      gstin: '24AAAAA0000A1Z5',
+      upiId: 'ganeshretail@okaxis',
+      pin: '1234'
+    });
+
     const lang = ref('gu');
-    const activeTab = ref('pos');
-    const isOnline = ref(navigator.onLine);
-    const printerConnected = ref(false);
+    const isShiftOpen = ref(true);
     const cameraActive = ref(false);
+    const printerConnected = ref(false);
     const bannerNotice = ref(null);
+    const cameraVideoRef = ref(null);
+    let cameraMediaStream = null;
+
+    const activeTab = ref('pos');
+    const navigationTabs = [
+      { id: 'pos', icon: '🏪', key: 'nav_pos' },
+      { id: 'inventory', icon: '📦', key: 'nav_inventory' },
+      { id: 'khata', icon: '📒', key: 'nav_khata' },
+      { id: 'reports', icon: '📊', key: 'nav_reports' }
+    ];
+
     const productFilter = ref('');
     const selectedCategory = ref('all');
-    const activePayMode = ref('cash');
-
-    const khataCustomerPhone = ref('');
-    const khataCustomerName = ref('');
-
+    const categories = ref(['કરિયાણું', 'ડેરી', 'પીણાં', 'મસાલા']);
     const inventoryList = ref([]);
-    const activeCart = ref([]);
-    const parkedCarts = ref([]);
     const khataLedgerList = ref([]);
     const recentInvoices = ref([]);
 
-    // Shift Management & Security PIN
-    const isShiftOpen = ref(true);
+    const activeCart = ref([]);
+    const cartDrawerOpen = ref(false);
+    const activePayMode = ref('cash');
+    const khataCustomerPhone = ref('');
+    const khataCustomerName = ref('');
+
     const pinPromptActive = ref(false);
     const enteredPin = ref('');
-    let pendingGuardedAction = null;
+    let guardedActionCallback = null;
 
-    // Zero-Popup Custom Modal States
-    const activeModal = ref(null); // 'priceOverride' | 'addStock' | 'settleKhata'
-    const priceOverrideForm = ref({ idx: -1, name: '', newPrice: 0 });
-    const newStockForm = ref({ nameEn: '', nameHi: '', nameGu: '', price: 0, stock: 0, category: 'General' });
-    const khataSettleForm = ref({ phone: '', name: '', balance: 0, amount: 0 });
+    const activeModal = ref(null);
+    const priceOverrideForm = ref({ index: -1, name: '', newPrice: 0 });
+    const newProductForm = ref({ code: '', nameGu: '', nameEn: '', price: null, stock: 10, category: 'કરિયાણું' });
+    const settleKhataForm = ref({ phone: '', name: '', balance: 0, amount: null });
 
-    let bluetoothDevice = null;
-    let bluetoothCharacteristic = null;
-    let cameraStream = null;
-    let barcodeDetector = null;
+    const t = (key) => dictionary[lang.value]?.[key] || key;
+    const setLang = (l) => { lang.value = l; };
 
-    const cameraVideoRef = ref(null);
-    const barcodeInputRef = ref(null);
-
-    const config = ref({
-      storeName: 'PATEL GENERAL STORE',
-      address: 'Station Road, Vadodara, Gujarat',
-      gstin: '24AAACP1234M1Z2',
-      phone: '9876543210',
-      upiId: 'patelstore@okaxis',
-      securityPin: '1234'
-    });
-
-    const navigationTabs = [
-      { id: 'pos', icon: '🛒', key: 'tab_pos' },
-      { id: 'parked', icon: '⏸️', key: 'tab_parked' },
-      { id: 'inventory', icon: '📦', key: 'tab_inventory' },
-      { id: 'khata', icon: '📒', key: 'tab_khata' },
-      { id: 'reports', icon: '📊', key: 'tab_reports' }
-    ];
-
-    const t = (k) => lexicon[lang.value][k] || k;
-    const setLang = (l) => lang.value = l;
-
-    const playAudioTone = (freq = 880, duration = 0.08) => {
-      try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.frequency.value = freq;
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
-        osc.stop(audioCtx.currentTime + duration);
-      } catch (e) {}
-    };
-
-    onMounted(async () => {
-      try {
-        const count = await db.products.count();
-        if (count === 0) {
-          await db.products.bulkAdd(DEFAULT_INVENTORY);
-        }
-        await reloadAllData();
-      } catch (err) {
-        bannerNotice.value = 'DB Load Error: ' + err.message;
+    const loadDatabase = async () => {
+      const count = await db.products.count();
+      if (count === 0) {
+        await db.products.bulkAdd(defaultProducts);
       }
-
-      window.addEventListener('online', () => isOnline.value = true);
-      window.addEventListener('offline', () => isOnline.value = false);
-
-      // Hardware Scanner Keyboard-Wedge Listener
-      let keyBuffer = '';
-      let lastKeyTime = Date.now();
-      window.addEventListener('keydown', (e) => {
-        if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-
-        const currentTime = Date.now();
-        if (currentTime - lastKeyTime > 100) keyBuffer = '';
-        lastKeyTime = currentTime;
-
-        if (e.key === 'Enter') {
-          if (keyBuffer.length >= 3) {
-            handleBarcodeScanned(keyBuffer);
-            keyBuffer = '';
-          }
-        } else if (e.key.length === 1) {
-          keyBuffer += e.key;
-        }
-      });
-    });
-
-    const reloadAllData = async () => {
       inventoryList.value = await db.products.toArray();
       khataLedgerList.value = await db.khata.toArray();
-      recentInvoices.value = await db.invoices.reverse().limit(10).toArray();
-      renderUpiQrMini();
+      recentInvoices.value = (await db.invoices.reverse().limit(20).toArray());
     };
 
-    const categories = computed(() => {
-      const set = new Set(inventoryList.value.map(p => p.category));
-      return Array.from(set);
-    });
-
     const visibleProducts = computed(() => {
-      const q = productFilter.value.trim().toLowerCase();
       return inventoryList.value.filter(p => {
-        const matchCategory = selectedCategory.value === 'all' || p.category === selectedCategory.value;
-        const matchQuery = p.code.includes(q) || p.name[lang.value].toLowerCase().includes(q) || p.name.en.toLowerCase().includes(q);
-        return matchCategory && matchQuery;
+        const matchesCategory = selectedCategory.value === 'all' || p.category === selectedCategory.value;
+        const q = productFilter.value.trim().toLowerCase();
+        const matchesFilter = !q || 
+          p.code.toLowerCase().includes(q) || 
+          (p.name.gu && p.name.gu.toLowerCase().includes(q)) || 
+          (p.name.en && p.name.en.toLowerCase().includes(q)) ||
+          (p.name.hi && p.name.hi.toLowerCase().includes(q));
+        return matchesCategory && matchesFilter;
       });
     });
 
-    const subtotalTaxable = computed(() => {
-      return activeCart.value.reduce((acc, c) => acc + (c.price * c.qty), 0);
+    const netPayableTotal = computed(() => {
+      return activeCart.value.reduce((sum, item) => {
+        return sum + (item.price * item.qty * (1 + (item.taxRate || 0) / 100));
+      }, 0);
     });
-
-    const totalGst = computed(() => {
-      return activeCart.value.reduce((acc, c) => acc + ((c.price * c.qty) * (c.taxRate / 100)), 0);
-    });
-
-    const rawGross = computed(() => subtotalTaxable.value + totalGst.value);
-    const netPayableTotal = computed(() => Math.round(rawGross.value));
-    const roundOffValue = computed(() => netPayableTotal.value - rawGross.value);
 
     const lifetimeMetrics = computed(() => {
       const totalSales = recentInvoices.value.reduce((acc, inv) => acc + inv.total, 0);
-      const khataDebt = khataLedgerList.value.reduce((acc, k) => acc + k.balance, 0);
-      return { totalSales, invoicesCount: recentInvoices.value.length, khataDebt };
+      return { totalSales, invoicesCount: recentInvoices.value.length };
     });
 
-    const handleBarcodeScanned = (barcode) => {
-      const product = inventoryList.value.find(p => p.code === barcode.trim());
-      if (product) {
-        addItemToCart(product);
-        bannerNotice.value = `Scanned: ${product.name[lang.value]}`;
-      } else {
-        bannerNotice.value = `Unknown barcode: ${barcode}`;
-        playAudioTone(300, 0.2);
-      }
-    };
-
-    // Camera Barcode Scanning Engine with Proper Track Cleanup
-    const toggleCameraScanner = async () => {
-      if (cameraActive.value) {
-        if (cameraStream) {
-          cameraStream.getTracks().forEach(track => track.stop());
-          cameraStream = null;
-        }
-        cameraActive.value = false;
-        return;
-      }
-
-      if (!('BarcodeDetector' in window)) {
-        bannerNotice.value = 'BarcodeDetector API not available. Use modern Chrome or a USB hardware scanner.';
-        return;
-      }
-
-      try {
-        barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'qr_code', 'code_128', 'upc_a'] });
-        cameraStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        cameraActive.value = true;
-        await nextTick();
-        
-        if (cameraVideoRef.value) {
-          cameraVideoRef.value.srcObject = cameraStream;
-          try {
-            await cameraVideoRef.value.play();
-          } catch (err) {
-            console.warn('Video playback autoplay guard:', err);
-          }
-        }
-
-        const scanFrame = async () => {
-          if (!cameraActive.value || !cameraVideoRef.value) return;
-          try {
-            const barcodes = await barcodeDetector.detect(cameraVideoRef.value);
-            if (barcodes.length > 0) {
-              handleBarcodeScanned(barcodes[0].rawValue);
-              playAudioTone(1500, 0.08);
-              await new Promise(r => setTimeout(r, 1200));
-            }
-          } catch (e) {}
-          if (cameraActive.value) {
-            requestAnimationFrame(scanFrame);
-          }
-        };
-        requestAnimationFrame(scanFrame);
-      } catch (err) {
-        bannerNotice.value = 'Camera Access Failed: ' + err.message;
-        cameraActive.value = false;
-      }
-    };
-
-    // Security PIN Guard Mechanism
-    const triggerGuardedAction = (action) => {
-      pendingGuardedAction = action;
-      enteredPin.value = '';
-      pinPromptActive.value = true;
-    };
-
-    const appendPin = (digit) => {
-      if (enteredPin.value.length < 4) enteredPin.value += digit;
-    };
-
-    const submitPin = () => {
-      if (enteredPin.value === config.value.securityPin) {
-        pinPromptActive.value = false;
-        const act = pendingGuardedAction;
-        pendingGuardedAction = null;
-        if (act) act();
-      } else {
-        bannerNotice.value = 'Invalid Security PIN. Access Denied.';
-        enteredPin.value = '';
-        playAudioTone(250, 0.25);
-      }
-    };
-
-    // Cart Operations
     const addItemToCart = (product) => {
-      if (!isShiftOpen.value) {
-        bannerNotice.value = t('shift_closed');
-        return;
-      }
       if (product.stock <= 0) {
-        bannerNotice.value = `${product.name[lang.value]}: Out of stock`;
+        bannerNotice.value = `${product.name[lang.value]} સ્ટોકમાં નથી!`;
         return;
       }
-      const existing = activeCart.value.find(c => c.id === product.id);
+      const existing = activeCart.value.find(item => item.id === product.id);
       if (existing) {
         if (existing.qty < product.stock) {
-          existing.qty++;
-          playAudioTone(1200, 0.05);
+          existing.qty += 1;
         } else {
-          bannerNotice.value = `Available stock limit reached (${product.stock})`;
+          bannerNotice.value = `સ્ટોક મર્યાદા પહોંચી ગઈ છે (${product.stock})`;
         }
       } else {
-        activeCart.value.push({ ...product, qty: 1 });
-        playAudioTone(880, 0.05);
+        activeCart.value.push({
+          id: product.id,
+          code: product.code,
+          name: { ...product.name },
+          price: product.price,
+          qty: 1,
+          taxRate: product.taxRate || 0
+        });
       }
     };
 
     const updateLineQty = (idx, delta) => {
       const item = activeCart.value[idx];
       const prod = inventoryList.value.find(p => p.id === item.id);
-      const stock = prod ? prod.stock : item.stock;
-      const next = item.qty + delta;
-
-      if (next <= 0) {
+      const newQty = item.qty + delta;
+      if (newQty <= 0) {
         activeCart.value.splice(idx, 1);
-      } else if (next <= stock) {
-        item.qty = next;
-        playAudioTone(1000, 0.04);
+      } else if (prod && newQty > prod.stock) {
+        bannerNotice.value = `મહત્તમ ઉપલબ્ધ સ્ટોક: ${prod.stock}`;
+      } else {
+        item.qty = newQty;
       }
     };
 
-    // Non-Blocking Price Override Modal Handlers
+    const clearActiveCart = () => {
+      activeCart.value = [];
+    };
+
     const openPriceOverrideModal = (idx) => {
+      const item = activeCart.value[idx];
+      priceOverrideForm.value = {
+        index: idx,
+        name: item.name[lang.value],
+        newPrice: item.price
+      };
       triggerGuardedAction(() => {
-        const item = activeCart.value[idx];
-        priceOverrideForm.value = {
-          idx,
-          name: item.name[lang.value] || item.name.en,
-          newPrice: item.price
-        };
         activeModal.value = 'priceOverride';
       });
     };
 
-    const applyPriceOverride = () => {
-      const { idx, newPrice } = priceOverrideForm.value;
-      if (idx >= 0 && activeCart.value[idx] && !isNaN(newPrice) && newPrice >= 0) {
-        activeCart.value[idx].price = Number(newPrice);
-        bannerNotice.value = `Rate updated to ₹${newPrice}`;
+    const savePriceOverride = () => {
+      const idx = priceOverrideForm.value.index;
+      if (idx >= 0 && activeCart.value[idx]) {
+        activeCart.value[idx].price = Number(priceOverrideForm.value.newPrice) || 0;
       }
       activeModal.value = null;
+      renderUpiQr();
     };
 
-    const clearActiveCart = () => { activeCart.value = []; };
-
-    const parkActiveOrder = () => {
-      if (!activeCart.value.length) return;
-      parkedCarts.value.push({
-        timestamp: new Date().toLocaleTimeString(),
-        items: JSON.parse(JSON.stringify(activeCart.value)),
-        total: netPayableTotal.value
-      });
-      activeCart.value = [];
-      bannerNotice.value = 'Ticket parked successfully.';
+    const setPaymentMode = (mode) => {
+      activePayMode.value = mode;
+      if (mode === 'upi') {
+        renderUpiQr();
+      }
     };
 
-    const restoreParkedCart = (idx) => {
-      const target = parkedCarts.value.splice(idx, 1)[0];
-      activeCart.value = target.items;
-      activeTab.value = 'pos';
-    };
-
-    const renderUpiQrMini = () => {
+    const renderUpiQr = () => {
       nextTick(() => {
         const canvas = document.getElementById('upiQrMiniCanvas');
-        if (!canvas) return;
-        const upiString = `upi://pay?pa=${config.value.upiId}&pn=${encodeURIComponent(config.value.storeName)}&am=${netPayableTotal.value}&cu=INR`;
-        QRCode.toCanvas(canvas, upiString, { width: 48, margin: 1 });
+        if (canvas && typeof QRCode !== 'undefined') {
+          const upiUri = `upi://pay?pa=${config.value.upiId}&pn=${encodeURIComponent(config.value.storeName)}&am=${netPayableTotal.value.toFixed(2)}&cu=INR`;
+          QRCode.toCanvas(canvas, upiUri, { width: 56, margin: 1 }, () => {});
+        }
       });
     };
 
-    const connectPrinter = async () => {
-      try {
-        bluetoothDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }],
-          optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
-        });
+    const triggerGuardedAction = (action) => {
+      guardedActionCallback = action;
+      enteredPin.value = '';
+      pinPromptActive.value = true;
+    };
 
-        bluetoothDevice.addEventListener('gattserverdisconnected', () => {
-          printerConnected.value = false;
-          bluetoothCharacteristic = null;
-          bannerNotice.value = 'Bluetooth printer disconnected.';
-        });
-
-        const server = await bluetoothDevice.gatt.connect();
-        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-        bluetoothCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
-        printerConnected.value = true;
-        bannerNotice.value = 'Thermal Printer Ready!';
-        playAudioTone(1760, 0.15);
-      } catch (e) {
-        bannerNotice.value = 'Bluetooth: ' + e.message;
+    const appendPin = (n) => {
+      if (enteredPin.value.length < 4) {
+        enteredPin.value += n;
       }
     };
 
-    const transmitPrinterBytes = async (byteArray) => {
-      if (!bluetoothCharacteristic) return;
-      const chunkSize = 100;
-      for (let i = 0; i < byteArray.length; i += chunkSize) {
-        const slice = byteArray.slice(i, i + chunkSize);
-        await bluetoothCharacteristic.writeValue(slice);
-        await new Promise(r => setTimeout(r, 20));
+    const submitPin = () => {
+      if (enteredPin.value === config.value.pin) {
+        pinPromptActive.value = false;
+        if (guardedActionCallback) guardedActionCallback();
+        guardedActionCallback = null;
+      } else {
+        bannerNotice.value = 'ખોટો પિન! ફરી પ્રયત્ન કરો.';
+        enteredPin.value = '';
       }
     };
 
-    // Atomic Multi-Store Checkout
-    const executeCheckout = async () => {
-      if (!activeCart.value.length || !isShiftOpen.value) return;
+    const toggleShiftStatus = () => {
+      isShiftOpen.value = !isShiftOpen.value;
+      bannerNotice.value = isShiftOpen.value ? 'નવી શિફ્ટ શરૂ કરવામાં આવી છે.' : 'શિફ્ટ બંધ કરવામાં આવી છે.';
+    };
 
-      if (activePayMode.value === 'khata' && !khataCustomerPhone.value.trim()) {
-        bannerNotice.value = 'Enter customer phone for Khata billing.';
-        return;
-      }
-
-      const invoiceId = 'INV-' + Date.now().toString().slice(-6);
-      const snapshotItems = JSON.parse(JSON.stringify(activeCart.value));
-      const finalTotals = {
-        taxable: subtotalTaxable.value,
-        gst: totalGst.value,
-        net: netPayableTotal.value
-      };
-
-      try {
-        await db.transaction('rw', db.products, db.invoices, db.khata, async () => {
-          for (const item of snapshotItems) {
-            const current = await db.products.get(item.id);
-            if (current) {
-              await db.products.update(item.id, {
-                stock: Math.max(0, current.stock - item.qty)
-              });
-            }
-          }
-
-          await db.invoices.add({
-            id: invoiceId,
-            timestamp: new Date().toISOString(),
-            total: finalTotals.net,
-            mode: activePayMode.value,
-            items: snapshotItems
-          });
-
-          if (activePayMode.value === 'khata') {
-            const phone = khataCustomerPhone.value.trim();
-            const existing = await db.khata.get(phone);
-            const currentBal = existing ? existing.balance : 0;
-            await db.khata.put({
-              phone,
-              name: khataCustomerName.value.trim() || 'Retail Customer',
-              balance: currentBal + finalTotals.net
-            });
-          }
-        });
-
-        // 1-Bit Monochrome Thermal Print Stream
-        if (printerConnected.value && bluetoothCharacteristic) {
-          try {
-            const rasterBytes = await EscPosThermalRasterizer.renderReceiptToRasterBytes({
-              config: config.value,
-              invoiceId,
-              items: snapshotItems,
-              totals: finalTotals,
-              payMode: activePayMode.value,
-              lang: lang.value
-            });
-            await transmitPrinterBytes(rasterBytes);
-          } catch (pErr) {
-            bannerNotice.value = 'Print transmission error: ' + pErr.message;
-          }
-        }
-
-        playAudioTone(1760, 0.2);
-        bannerNotice.value = `${t('bill_success')}${invoiceId}`;
-        activeCart.value = [];
-        khataCustomerPhone.value = '';
-        khataCustomerName.value = '';
-        await reloadAllData();
-      } catch (err) {
-        bannerNotice.value = 'Transaction failure: ' + err.message;
+    const replenishStock = async (itemId, count) => {
+      const prod = inventoryList.value.find(p => p.id === itemId);
+      if (prod) {
+        prod.stock += count;
+        await db.products.update(itemId, { stock: prod.stock });
+        bannerNotice.value = `${prod.name[lang.value]} સ્ટોક અપડેટ થયો (+${count})`;
       }
     };
 
-    const replenishStock = async (id, delta) => {
-      const p = await db.products.get(id);
-      if (p) {
-        await db.products.update(id, { stock: p.stock + delta });
-        await reloadAllData();
-        bannerNotice.value = `Replenished +${delta} stock for #${p.code}`;
-      }
-    };
-
-    // Non-Blocking Add Stock SKU Modal Handlers
     const openAddStockModal = () => {
-      newStockForm.value = {
-        nameEn: '',
-        nameHi: '',
-        nameGu: '',
-        price: 0,
-        stock: 0,
-        category: 'General'
-      };
+      newProductForm.value = { code: '', nameGu: '', nameEn: '', price: null, stock: 10, category: categories.value[0] };
       activeModal.value = 'addStock';
     };
 
-    const saveNewStock = async () => {
-      if (!newStockForm.value.nameEn.trim()) {
-        bannerNotice.value = 'Please provide product name.';
+    const addNewProduct = async () => {
+      const form = newProductForm.value;
+      if (!form.code || !form.nameGu || !form.price) {
+        bannerNotice.value = 'કૃપા કરીને બધી વિગતો ભરો.';
         return;
       }
-      const id = Date.now();
-      const code = String(id).slice(-6);
-      await db.products.add({
-        id,
-        code,
-        category: newStockForm.value.category || 'General',
+      const item = {
+        code: form.code,
         name: {
-          en: newStockForm.value.nameEn.trim(),
-          hi: newStockForm.value.nameHi.trim() || newStockForm.value.nameEn.trim(),
-          gu: newStockForm.value.nameGu.trim() || newStockForm.value.nameEn.trim()
+          gu: form.nameGu,
+          hi: form.nameGu,
+          en: form.nameEn || form.nameGu
         },
-        price: Number(newStockForm.value.price) || 0,
-        taxRate: 5,
-        stock: Number(newStockForm.value.stock) || 0
-      });
+        price: Number(form.price),
+        stock: Number(form.stock) || 0,
+        category: form.category,
+        taxRate: 5
+      };
+      const id = await db.products.add(item);
+      item.id = id;
+      inventoryList.value.push(item);
       activeModal.value = null;
-      await reloadAllData();
-      bannerNotice.value = `Added SKU #${code}`;
+      bannerNotice.value = 'નવી વસ્તુ ઉમેરવામાં આવી!';
     };
 
-    // Non-Blocking Settle Khata Modal Handlers
     const openSettleKhataModal = (customer) => {
-      khataSettleForm.value = {
+      settleKhataForm.value = {
         phone: customer.phone,
         name: customer.name,
         balance: customer.balance,
@@ -1295,54 +710,171 @@ createApp({
       activeModal.value = 'settleKhata';
     };
 
-    const submitKhataSettlement = async () => {
-      const amt = Number(khataSettleForm.value.amount);
-      if (amt > 0) {
-        const nextBal = Math.max(0, khataSettleForm.value.balance - amt);
-        await db.khata.update(khataSettleForm.value.phone, { balance: nextBal });
-        await reloadAllData();
-        bannerNotice.value = `Updated balance for ${khataSettleForm.value.name}: ₹${nextBal.toFixed(2)}`;
+    const executeSettleKhata = async () => {
+      const { phone, balance, amount } = settleKhataForm.value;
+      const amt = Number(amount) || 0;
+      if (amt <= 0) return;
+      const newBal = Math.max(0, balance - amt);
+      if (newBal === 0) {
+        await db.khata.delete(phone);
+      } else {
+        await db.khata.update(phone, { balance: newBal });
       }
+      khataLedgerList.value = await db.khata.toArray();
       activeModal.value = null;
+      bannerNotice.value = `₹${amt.toFixed(2)} જમા કરવામાં આવ્યા.`;
     };
 
-    const toggleShiftStatus = () => {
-      isShiftOpen.value = !isShiftOpen.value;
-      bannerNotice.value = isShiftOpen.value ? 'New Shift Opened' : 'Shift Finalized & Closed';
+    const connectPrinter = async () => {
+      try {
+        if (navigator.bluetooth) {
+          bannerNotice.value = 'બ્લૂટૂથ પ્રિન્ટર શોધી રહ્યું છે...';
+          const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+          });
+          printerConnected.value = !!device;
+          bannerNotice.value = `પ્રિન્ટર કનેક્ટ થયું: ${device.name || 'BT Printer'}`;
+        } else {
+          printerConnected.value = !printerConnected.value;
+          bannerNotice.value = printerConnected.value ? 'ડેમો પ્રિન્ટર કનેક્ટ થયું!' : 'પ્રિન્ટર ડિસ્કનેક્ટ થયું.';
+        }
+      } catch (err) {
+        printerConnected.value = false;
+        bannerNotice.value = 'બ્લૂટૂથ જોડાણ રદ કર્યું અથવા સમર્થિત નથી.';
+      }
     };
 
-    const exportDataBackup = async () => {
-      const exportPayload = {
-        store: config.value,
-        products: await db.products.toArray(),
-        invoices: await db.invoices.toArray(),
-        khata: await db.khata.toArray(),
-        exportedAt: new Date().toISOString()
+    const toggleCameraScanner = async () => {
+      if (cameraActive.value) {
+        if (cameraMediaStream) {
+          cameraMediaStream.getTracks().forEach(t => t.stop());
+        }
+        cameraActive.value = false;
+        return;
+      }
+      try {
+        cameraMediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        cameraActive.value = true;
+        await nextTick();
+        if (cameraVideoRef.value) {
+          cameraVideoRef.value.srcObject = cameraMediaStream;
+        }
+        bannerNotice.value = 'કેમેરા શરૂ થયો. કોડ સ્કેન કરો.';
+      } catch (e) {
+        bannerNotice.value = 'કેમેરાની પરવાનગી મળી નથી.';
+        cameraActive.value = false;
+      }
+    };
+
+    const executeCheckout = async () => {
+      if (!isShiftOpen.value) {
+        bannerNotice.value = 'શિફ્ટ બંધ છે. પહેલાં શિફ્ટ ખોલો!';
+        return;
+      }
+      if (!activeCart.value.length) {
+        bannerNotice.value = 'કાર્ટ ખાલી છે!';
+        return;
+      }
+
+      if (activePayMode.value === 'khata') {
+        if (!khataCustomerPhone.value) {
+          bannerNotice.value = 'ગ્રાહકનો ફોન નંબર જરૂરી છે!';
+          return;
+        }
+        const existing = await db.khata.get(khataCustomerPhone.value);
+        const newBal = (existing ? existing.balance : 0) + netPayableTotal.value;
+        await db.khata.put({
+          phone: khataCustomerPhone.value,
+          name: khataCustomerName.value || 'અનામી ગ્રાહક',
+          balance: newBal
+        });
+        khataLedgerList.value = await db.khata.toArray();
+      }
+
+      for (const line of activeCart.value) {
+        const prod = inventoryList.value.find(p => p.id === line.id);
+        if (prod) {
+          prod.stock = Math.max(0, prod.stock - line.qty);
+          await db.products.update(prod.id, { stock: prod.stock });
+        }
+      }
+
+      const inv = {
+        timestamp: new Date().toISOString(),
+        total: netPayableTotal.value,
+        items: [...activeCart.value],
+        mode: activePayMode.value
       };
-      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `POS_BACKUP_${Date.now()}.json`;
-      a.click();
+      const invId = await db.invoices.add(inv);
+      inv.id = invId;
+      recentInvoices.value.unshift(inv);
+
+      bannerNotice.value = `બિલ #${invId} તૈયાર! ₹${netPayableTotal.value.toFixed(2)} ચૂકવાયા.`;
+      activeCart.value = [];
+      cartDrawerOpen.value = false;
+      khataCustomerPhone.value = '';
+      khataCustomerName.value = '';
     };
+
+    onMounted(() => {
+      loadDatabase();
+    });
 
     return {
-      lang, activeTab, isOnline, printerConnected, cameraActive, bannerNotice,
-      productFilter, selectedCategory, activePayMode, khataCustomerPhone, khataCustomerName,
-      inventoryList, activeCart, parkedCarts, khataLedgerList, recentInvoices,
-      isShiftOpen, pinPromptActive, enteredPin, cameraVideoRef, barcodeInputRef,
-      activeModal, priceOverrideForm, newStockForm, khataSettleForm,
-      config, navigationTabs, categories, visibleProducts, subtotalTaxable,
-      totalGst, netPayableTotal, roundOffValue, lifetimeMetrics, t, setLang,
-      addItemToCart, updateLineQty, clearActiveCart, parkActiveOrder, restoreParkedCart,
-      connectPrinter, toggleCameraScanner, executeCheckout, replenishStock,
-      openPriceOverrideModal, applyPriceOverride, openAddStockModal, saveNewStock,
-      openSettleKhataModal, submitKhataSettlement, triggerGuardedAction,
-      appendPin, submitPin, toggleShiftStatus, exportDataBackup
+      config,
+      lang,
+      setLang,
+      t,
+      isShiftOpen,
+      cameraActive,
+      printerConnected,
+      bannerNotice,
+      cameraVideoRef,
+      toggleCameraScanner,
+      connectPrinter,
+      activeTab,
+      navigationTabs,
+      productFilter,
+      selectedCategory,
+      categories,
+      inventoryList,
+      visibleProducts,
+      addItemToCart,
+      updateLineQty,
+      clearActiveCart,
+      activeCart,
+      cartDrawerOpen,
+      netPayableTotal,
+      activePayMode,
+      setPaymentMode,
+      khataCustomerPhone,
+      khataCustomerName,
+      executeCheckout,
+      pinPromptActive,
+      enteredPin,
+      appendPin,
+      submitPin,
+      triggerGuardedAction,
+      activeModal,
+      priceOverrideForm,
+      openPriceOverrideModal,
+      savePriceOverride,
+      newProductForm,
+      openAddStockModal,
+      addNewProduct,
+      replenishStock,
+      khataLedgerList,
+      settleKhataForm,
+      openSettleKhataModal,
+      executeSettleKhata,
+      lifetimeMetrics,
+      recentInvoices,
+      toggleShiftStatus
     };
   }
 }).mount('#app');
 </script>
+
 </body>
 </html>
