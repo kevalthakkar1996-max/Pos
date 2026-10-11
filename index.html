@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Unified Enterprise Retail POS</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3, Dexie.js & QR Code Generator -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Noto+Sans+Gujarati:wght@400;600;700&display=swap');
+    body { font-family: 'Noto Sans Gujarati', 'Plus Jakarta Sans', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 select-none overflow-hidden h-screen">
+
+<div id="app" class="flex flex-col h-full">
+
+  <!-- TOP HEADER & OPERATIONAL BAR -->
+  <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shadow-xl z-20">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-lg shadow-lg shadow-teal-500/20">
+        P
+      </div>
+      <div>
+        <h1 class="font-extrabold text-sm tracking-wide text-white flex items-center gap-2">
+          {{ config.storeName }}
+          <span class="text-[10px] px-2 py-0.5 rounded-full font-bold" :class="isOnline ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'">
+            {{ isOnline ? 'ONLINE' : 'OFFLINE MODE' }}
+          </span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full font-bold" :class="isShiftOpen ? 'bg-teal-500/10 text-teal-300 border border-teal-500/30' : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'">
+            {{ isShiftOpen ? t('shift_open') : t('shift_closed') }}
+          </span>
+        </h1>
+        <p class="text-[11px] text-slate-400">GSTIN: {{ config.gstin }} • Terminal #01</p>
+      </div>
+    </div>
+
+    <!-- HARDWARE CONTROLS & LOCALIZATION -->
+    <div class="flex items-center space-x-2">
+      <!-- Camera Barcode Scanner Trigger -->
+      <button 
+        @click="toggleCameraScanner"
+        :class="cameraActive ? 'bg-teal-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition flex items-center gap-1.5 shadow-sm"
+      >
+        <span>📷</span> {{ cameraActive ? t('stop_camera') : t('scan_barcode') }}
+      </button>
+
+      <!-- Web Bluetooth Thermal Printer Connector -->
+      <button 
+        @click="connectPrinter" 
+        :class="printerConnected ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/40 shadow-emerald-500/10' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'"
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition flex items-center gap-1.5 shadow-sm"
+      >
+        <span class="w-2 h-2 rounded-full" :class="printerConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'"></span>
+        {{ printerConnected ? t('printer_online') : t('connect_printer') }}
+      </button>
+
+      <!-- Language Selector -->
+      <div class="inline-flex rounded-lg bg-slate-950 border border-slate-800 p-0.5 shadow-inner">
+        <button @click="setLang('en')" :class="lang === 'en' ? 'bg-teal-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1 text-xs rounded-md transition">ENG</button>
+        <button @click="setLang('hi')" :class="lang === 'hi' ? 'bg-teal-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1 text-xs rounded-md transition">हिंदी</button>
+        <button @click="setLang('gu')" :class="lang === 'gu' ? 'bg-teal-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'" class="px-2.5 py-1 text-xs rounded-md transition">ગુજરાતી</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAVIGATION TABS -->
+  <nav class="bg-slate-900/80 backdrop-blur border-b border-slate-800 px-4 flex space-x-1 z-10">
+    <button 
+      v-for="tab in navigationTabs" 
+      :key="tab.id" 
+      @click="activeTab = tab.id" 
+      :class="activeTab === tab.id ? 'border-teal-400 text-teal-300 font-bold bg-teal-500/5' : 'border-transparent text-slate-400 hover:text-slate-200'"
+      class="py-2.5 px-3 text-xs border-b-2 flex items-center gap-2 transition"
+    >
+      <span>{{ tab.icon }}</span>
+      <span>{{ t(tab.key) }}</span>
+      <span v-if="tab.id === 'parked' && parkedCarts.length" class="ml-1 px-1.5 py-0.2 text-[10px] rounded-full bg-teal-500/20 text-teal-300 font-bold border border-teal-500/30">
+        {{ parkedCarts.length }}
+      </span>
+    </button>
+  </nav>
+
+  <!-- NON-BLOCKING STATUS BANNER -->
+  <div v-if="bannerNotice" class="bg-teal-500/10 border-b border-teal-500/20 text-teal-200 px-4 py-2 text-xs flex justify-between items-center transition">
+    <span class="flex items-center gap-2">🔔 {{ bannerNotice }}</span>
+    <button @click="bannerNotice = null" class="text-teal-400 font-bold text-base hover:text-white">&times;</button>
+  </div>
+
+  <!-- WORKSPACE VIEWPORT -->
+  <main class="flex-1 flex overflow-hidden relative">
+
+    <!-- CAMERA SCANNER OVERLAY -->
+    <div v-show="cameraActive" class="absolute top-2 left-2 z-30 w-72 bg-slate-900 border border-teal-500/50 rounded-2xl shadow-2xl p-2 overflow-hidden flex flex-col items-center">
+      <div class="w-full flex justify-between items-center px-1 pb-1">
+        <span class="text-[11px] font-bold text-teal-300">Target Barcode</span>
+        <button @click="toggleCameraScanner" class="text-xs text-rose-400 font-bold">&times;</button>
+      </div>
+      <video ref="cameraVideoRef" autoplay playsinline muted class="w-full h-40 bg-black rounded-lg object-cover"></video>
+      <p class="text-[10px] text-slate-400 mt-1">USB Scanners also work globally</p>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- TAB 1: POS BILLING COUNTER                                           -->
+    <!-- ==================================================================== -->
+    <div v-show="activeTab === 'pos'" class="flex-1 flex overflow-hidden">
+      <!-- Left Panel: Product Catalog -->
+      <section class="flex-1 flex flex-col p-3 overflow-hidden bg-slate-950">
+        <!-- Search & Category Filters -->
+        <div class="mb-3 flex gap-2">
+          <div class="relative flex-1">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">🔍</span>
+            <input 
+              v-model="productFilter" 
+              ref="barcodeInputRef"
+              type="text" 
+              :placeholder="t('search_placeholder')" 
+              class="w-full pl-9 pr-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
+            />
+          </div>
+          <div class="flex gap-1 overflow-x-auto no-scrollbar">
+            <button 
+              @click="selectedCategory = 'all'" 
+              :class="selectedCategory === 'all' ? 'bg-teal-600 text-white font-bold' : 'bg-slate-900 text-slate-400 hover:text-white'" 
+              class="px-3 py-1.5 text-xs rounded-xl whitespace-nowrap transition"
+            >
+              {{ t('cat_all') }}
+            </button>
+            <button 
+              v-for="cat in categories" 
+              :key="cat" 
+              @click="selectedCategory = cat" 
+              :class="selectedCategory === cat ? 'bg-teal-600 text-white font-bold' : 'bg-slate-900 text-slate-400 hover:text-white'" 
+              class="px-3 py-1.5 text-xs rounded-xl whitespace-nowrap transition"
+            >
+              {{ cat }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Catalog Grid -->
+        <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 pr-1 no-scrollbar">
+          <div 
+            v-for="p in visibleProducts" 
+            :key="p.id" 
+            @click="addItemToCart(p)"
+            :class="p.stock <= 0 ? 'opacity-40 pointer-events-none border-red-500/20 bg-slate-900/30' : 'hover:border-teal-500/60 hover:bg-slate-800/80 cursor-pointer active:scale-95 bg-slate-900/60'"
+            class="p-3 rounded-2xl border border-slate-800/80 flex flex-col justify-between transition shadow-lg group relative overflow-hidden"
+          >
+            <div>
+              <div class="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                <span>#{{ p.code }}</span>
+                <span :class="p.stock <= 5 ? 'text-rose-400 font-bold' : 'text-slate-400'">
+                  {{ t('stock') }}: {{ p.stock }}
+                </span>
+              </div>
+              <h3 class="font-bold text-xs text-slate-100 group-hover:text-teal-300 transition line-clamp-2 leading-snug">
+                {{ p.name[lang] }}
+              </h3>
+            </div>
+            
+            <div class="mt-3 flex items-baseline justify-between pt-2 border-t border-slate-800">
+              <span class="text-sm font-extrabold text-teal-400">₹{{ p.price.toFixed(2) }}</span>
+              <span class="text-[10px] text-slate-500">GST {{ p.taxRate }}%</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Order Register & Payment Checkout -->
+      <section class="w-88 sm:w-96 bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl z-10">
+        <div class="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+          <div>
+            <h2 class="font-extrabold text-xs text-white uppercase tracking-wider">{{ t('active_cart') }}</h2>
+            <p class="text-[10px] text-slate-400">{{ activeCart.length }} {{ t('items_selected') }}</p>
+          </div>
+          <div class="flex items-center gap-1">
+            <button 
+              @click="parkActiveOrder" 
+              :disabled="!activeCart.length"
+              class="px-2 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 rounded-lg transition"
+            >
+              ⏸️ {{ t('park_bill') }}
+            </button>
+            <button 
+              @click="clearActiveCart" 
+              :disabled="!activeCart.length"
+              class="px-2 py-1 text-[11px] bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 text-rose-400 rounded-lg transition"
+            >
+              🗑️
+            </button>
+          </div>
+        </div>
+
+        <!-- Cart Items List -->
+        <div class="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
+          <div v-if="!activeCart.length" class="h-full flex flex-col items-center justify-center text-slate-600 gap-2">
+            <span class="text-3xl opacity-30">🛒</span>
+            <p class="text-xs">{{ t('cart_empty') }}</p>
+          </div>
+
+          <div 
+            v-for="(line, idx) in activeCart" 
+            :key="line.id" 
+            class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between gap-2"
+          >
+            <div class="flex-1 min-w-0">
+              <h4 class="font-bold text-xs text-slate-200 truncate">{{ line.name[lang] }}</h4>
+              <div class="flex items-center gap-2 mt-0.5">
+                <span class="text-[10px] text-slate-500">₹{{ line.price.toFixed(2) }} ({{ line.taxRate }}%)</span>
+                <!-- In-Line Price Override Trigger -->
+                <button @click="openPriceOverrideModal(idx)" class="text-[9px] font-bold text-teal-400 hover:underline">
+                  [{{ t('override_rate') }}]
+                </button>
+              </div>
+            </div>
+
+            <!-- Quantity Controls -->
+            <div class="flex items-center gap-1.5">
+              <div class="flex items-center bg-slate-800 rounded-lg border border-slate-700/80 p-0.5">
+                <button @click="updateLineQty(idx, -1)" class="w-6 h-6 flex items-center justify-center text-xs font-bold text-slate-400 hover:text-white rounded">-</button>
+                <span class="w-6 text-center text-xs font-extrabold text-white">{{ line.qty }}</span>
+                <button @click="updateLineQty(idx, 1)" class="w-6 h-6 flex items-center justify-center text-xs font-bold text-slate-400 hover:text-white rounded">+</button>
+              </div>
+              <span class="w-16 text-right font-extrabold text-xs text-teal-400">
+                ₹{{ ((line.price * line.qty) * (1 + line.taxRate / 100)).toFixed(2) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Financial Computations & Settlement -->
+        <div class="p-3 bg-slate-950 border-t border-slate-800 space-y-2.5">
+          <div class="space-y-1 text-xs">
+            <div class="flex justify-between text-slate-400">
+              <span>{{ t('taxable_amt') }}</span>
+              <span>₹{{ subtotalTaxable.toFixed(2) }}</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span>{{ t('gst_total') }}</span>
+              <span>₹{{ totalGst.toFixed(2) }}</span>
+            </div>
+            <div class="flex justify-between text-slate-500 text-[11px]">
+              <span>{{ t('round_off') }}</span>
+              <span>{{ roundOffValue >= 0 ? '+' : '' }}{{ roundOffValue.toFixed(2) }}</span>
+            </div>
+            <div class="flex justify-between text-sm font-extrabold text-white pt-1.5 border-t border-slate-800">
+              <span>{{ t('grand_total') }}</span>
+              <span class="text-teal-300 text-base">₹{{ netPayableTotal.toFixed(2) }}</span>
+            </div>
+          </div>
+
+          <!-- Payment Mode Selection -->
+          <div class="grid grid-cols-4 gap-1 pt-1">
+            <button 
+              v-for="mode in ['cash', 'upi', 'card', 'khata']" 
+              :key="mode" 
+              @click="activePayMode = mode"
+              :class="activePayMode === mode ? 'bg-teal-500 text-slate-950 font-black shadow-md shadow-teal-500/20' : 'bg-slate-800 text-slate-400 hover:text-white'"
+              class="py-1.5 text-[11px] rounded-lg font-bold transition capitalize"
+            >
+              {{ t('pay_' + mode) }}
+            </button>
+          </div>
+
+          <!-- Khata Details Inputs -->
+          <div v-if="activePayMode === 'khata'" class="space-y-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800">
+            <input 
+              v-model="khataCustomerPhone" 
+              type="tel" 
+              placeholder="Customer Phone (10 digits)" 
+              class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            />
+            <input 
+              v-model="khataCustomerName" 
+              type="text" 
+              placeholder="Customer Name" 
+              class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            />
+          </div>
+
+          <!-- Dynamic UPI QR Mini Preview -->
+          <div v-if="activePayMode === 'upi'" class="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+            <div class="text-[11px] text-slate-400">
+              <span class="font-bold text-white block">{{ config.upiId }}</span>
+              Scan via PhonePe, GPay, Paytm
+            </div>
+            <canvas id="upiQrMiniCanvas" class="w-12 h-12 bg-white rounded border border-white"></canvas>
+          </div>
+
+          <!-- Complete Checkout Button -->
+          <button 
+            @click="executeCheckout" 
+            :disabled="!activeCart.length || !isShiftOpen"
+            class="w-full py-3 bg-gradient-to-r from-teal-500 to-emerald-400 hover:from-teal-400 hover:to-emerald-300 disabled:opacity-30 disabled:pointer-events-none text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-teal-500/20 transition active:scale-[0.99] flex items-center justify-center gap-2"
+          >
+            <span>⚡</span>
+            <span>{{ t('checkout_print') }}</span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- TAB 2: PARKED ORDERS REPOSITORY                                      -->
+    <!-- ==================================================================== -->
+    <div v-show="activeTab === 'parked'" class="flex-1 p-6 overflow-y-auto no-scrollbar">
+      <div class="max-w-4xl mx-auto space-y-4">
+        <h2 class="text-sm font-extrabold text-white uppercase tracking-wider">{{ t('parked_bills') }}</h2>
+        <div v-if="!parkedCarts.length" class="text-center py-16 text-slate-500 text-xs">
+          {{ t('no_parked_bills') }}
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div v-for="(pCart, idx) in parkedCarts" :key="idx" class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex justify-between items-center">
+            <div>
+              <span class="text-[10px] text-teal-400 font-bold block mb-1">Ticket #{{ idx + 1 }} • {{ pCart.timestamp }}</span>
+              <p class="font-extrabold text-white text-xs">{{ pCart.items.length }} Items</p>
+              <p class="text-xs text-slate-400 mt-1">Total Valuation: ₹{{ pCart.total.toFixed(2) }}</p>
+            </div>
+            <button @click="restoreParkedCart(idx)" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition">
+              {{ t('restore_bill') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- TAB 3: INVENTORY CONTROLLER                                          -->
+    <!-- ==================================================================== -->
+    <div v-show="activeTab === 'inventory'" class="flex-1 p-6 overflow-y-auto no-scrollbar">
+      <div class="max-w-5xl mx-auto space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-sm font-extrabold text-white uppercase tracking-wider">{{ t('live_inventory') }}</h2>
+          <button @click="triggerGuardedAction(openAddStockModal)" class="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold transition">
+            + {{ t('add_new_sku') }}
+          </button>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-950 border-b border-slate-800 text-slate-400 font-bold">
+              <tr>
+                <th class="p-3">SKU</th>
+                <th class="p-3">Item Name</th>
+                <th class="p-3">Rate</th>
+                <th class="p-3">GST %</th>
+                <th class="p-3">Stock Level</th>
+                <th class="p-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60">
+              <tr v-for="item in inventoryList" :key="item.id" class="hover:bg-slate-800/40">
+                <td class="p-3 font-mono text-slate-400">#{{ item.code }}</td>
+                <td class="p-3 font-bold text-white">{{ item.name[lang] }}</td>
+                <td class="p-3 text-teal-400 font-bold">₹{{ item.price.toFixed(2) }}</td>
+                <td class="p-3 text-slate-400">{{ item.taxRate }}%</td>
+                <td class="p-3">
+                  <span :class="item.stock <= 5 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'" class="px-2 py-0.5 rounded-full text-[10px] font-bold">
+                    {{ item.stock }} Available
+                  </span>
+                </td>
+                <td class="p-3 text-right space-x-1">
+                  <button @click="triggerGuardedAction(() => replenishStock(item.id, 10))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold">+10</button>
+                  <button @click="triggerGuardedAction(() => replenishStock(item.id, 50))" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-[11px] font-bold">+50</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- TAB 4: CUSTOMER KHATA (CREDIT LEDGER)                                -->
+    <!-- ==================================================================== -->
+    <div v-show="activeTab === 'khata'" class="flex-1 p-6 overflow-y-auto no-scrollbar">
+      <div class="max-w-4xl mx-auto space-y-4">
+        <h2 class="text-sm font-extrabold text-white uppercase tracking-wider">{{ t('customer_khata') }}</h2>
+        <div v-if="!khataLedgerList.length" class="text-center py-16 text-slate-500 text-xs">
+          {{ t('no_khata_records') }}
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div v-for="customer in khataLedgerList" :key="customer.phone" class="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex justify-between items-center">
+            <div>
+              <h4 class="font-extrabold text-white text-sm">{{ customer.name }}</h4>
+              <p class="text-xs text-slate-400 font-mono mt-0.5">📞 {{ customer.phone }}</p>
+              <p class="text-xs text-rose-400 font-extrabold mt-2">Outstanding: ₹{{ customer.balance.toFixed(2) }}</p>
+            </div>
+            <button @click="openSettleKhataModal(customer)" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition">
+              {{ t('settle_payment') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- TAB 5: DAY-END Z-REPORT & SHIFT MANAGEMENT                           -->
+    <!-- ==================================================================== -->
+    <div v-show="activeTab === 'reports'" class="flex-1 p-6 overflow-y-auto no-scrollbar">
+      <div class="max-w-3xl mx-auto space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-sm font-extrabold text-white uppercase tracking-wider">{{ t('shift_summary') }}</h2>
+          <div class="space-x-2">
+            <button 
+              @click="triggerGuardedAction(toggleShiftStatus)"
+              :class="isShiftOpen ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'"
+              class="px-3 py-1.5 rounded-xl border text-xs font-bold transition"
+            >
+              {{ isShiftOpen ? t('close_shift') : t('start_shift') }}
+            </button>
+            <button @click="exportDataBackup" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition">
+              💾 {{ t('export_backup') }}
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">{{ t('total_sales') }}</span>
+            <span class="text-xl font-extrabold text-teal-400 mt-1 block">₹{{ lifetimeMetrics.totalSales.toFixed(2) }}</span>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">{{ t('invoices_issued') }}</span>
+            <span class="text-xl font-extrabold text-white mt-1 block">{{ lifetimeMetrics.invoicesCount }} Bills</span>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-900 border border-slate-800">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">{{ t('credit_outstanding') }}</span>
+            <span class="text-xl font-extrabold text-rose-400 mt-1 block">₹{{ lifetimeMetrics.khataDebt.toFixed(2) }}</span>
+          </div>
+        </div>
+
+        <!-- Invoices Log Table -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <h3 class="font-bold text-xs text-white uppercase mb-3">{{ t('recent_bills') }}</h3>
+          <div class="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
+            <div v-for="inv in recentInvoices" :key="inv.id" class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center text-xs">
+              <div>
+                <span class="font-bold text-white">#{{ inv.id }}</span>
+                <span class="text-slate-500 ml-2">{{ inv.timestamp.substring(11, 16) }} • {{ inv.mode.toUpperCase() }}</span>
+              </div>
+              <span class="font-extrabold text-teal-400">₹{{ inv.total.toFixed(2) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- CUSTOM REACTIVE MODAL ENGINES (ZERO NATIVE POPUPS)                  -->
+    <!-- ==================================================================== -->
+
+    <!-- 1. SECURITY PIN PAD MODAL -->
+    <div v-if="pinPromptActive" class="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-80 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center">
+        <h3 class="font-bold text-sm text-white mb-1">{{ t('auth_required') }}</h3>
+        <p class="text-xs text-slate-400 mb-4">Enter Master Security PIN</p>
+        
+        <div class="w-full bg-slate-950 rounded-xl py-3 border border-slate-800 flex justify-center items-center mb-6 tracking-widest text-xl font-mono text-teal-400">
+          {{ enteredPin ? '•'.repeat(enteredPin.length) : '----' }}
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 w-full">
+          <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click="appendPin(n)" class="h-12 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-lg transition">
+            {{ n }}
+          </button>
+          <button @click="enteredPin = ''" class="h-12 bg-rose-500/20 text-rose-300 font-bold rounded-xl text-sm transition">C</button>
+          <button @click="appendPin(0)" class="h-12 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-lg transition">0</button>
+          <button @click="submitPin" class="h-12 bg-teal-500 text-slate-950 font-black rounded-xl text-sm transition">OK</button>
+        </div>
+
+        <button @click="pinPromptActive = false; enteredPin = ''" class="mt-4 text-xs text-slate-500 hover:text-white">Cancel</button>
+      </div>
+    </div>
+
+    <!-- 2. PRICE OVERRIDE MODAL -->
+    <div v-if="activeModal === 'priceOverride'" class="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-80 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
+        <div>
+          <h3 class="font-bold text-sm text-white">{{ t('override_rate') }}</h3>
+          <p class="text-xs text-slate-400">{{ priceOverrideForm.name }}</p>
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-400 mb-1">New Unit Selling Price (₹)</label>
+          <input 
+            v-model.number="priceOverrideForm.newPrice" 
+            type="number" 
+            step="0.01"
+            class="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
+        </div>
+        <div class="flex gap-2">
+          <button @click="activeModal = null" class="flex-1 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition">Cancel</button>
+          <button @click="applyPriceOverride" class="flex-1 py-2 text-xs bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl transition">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. ADD NEW SKU MODAL -->
+    <div v-if="activeModal === 'addStock'" class="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-96 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-3">
+        <h3 class="font-bold text-sm text-white mb-2">{{ t('add_new_sku') }}</h3>
+        
+        <div>
+          <label class="block text-[11px] text-slate-400 mb-0.5">Product Name (English)</label>
+          <input v-model="newStockForm.nameEn" type="text" placeholder="e.g. Mustard Oil 1L" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-400 mb-0.5">Product Name (ગુજરાતી)</label>
+          <input v-model="newStockForm.nameGu" type="text" placeholder="e.g. રાયડો તેલ ૧ લીટર" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-0.5">Rate (₹)</label>
+            <input v-model.number="newStockForm.price" type="number" step="0.5" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-400 mb-0.5">Initial Stock</label>
+            <input v-model.number="newStockForm.stock" type="number" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-400 mb-0.5">Category</label>
+          <input v-model="newStockForm.category" type="text" placeholder="Groceries" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white focus:ring-1 focus:ring-teal-500" />
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button @click="activeModal = null" class="flex-1 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition">Cancel</button>
+          <button @click="saveNewStock" class="flex-1 py-2 text-xs bg-teal-500 hover:bg-teal-400 text-slate-950 font-black rounded-xl transition">Save Item</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. KHATA SETTLEMENT MODAL -->
+    <div v-if="activeModal === 'settleKhata'" class="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-80 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
+        <div>
+          <h3 class="font-bold text-sm text-white">{{ t('settle_payment') }}</h3>
+          <p class="text-xs text-slate-400 mt-0.5">{{ khataSettleForm.name }} ({{ khataSettleForm.phone }})</p>
+          <p class="text-xs text-rose-400 font-extrabold mt-1">Total Outstanding: ₹{{ khataSettleForm.balance.toFixed(2) }}</p>
+        </div>
+
+        <div>
+          <label class="block text-[11px] text-slate-400 mb-1">Amount Received (₹)</label>
+          <input 
+            v-model.number="khataSettleForm.amount" 
+            type="number" 
+            step="0.01"
+            class="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
+        </div>
+
+        <div class="flex gap-2">
+          <button @click="khataSettleForm.amount = khataSettleForm.balance" class="w-full py-1.5 text-[11px] bg-slate-800 hover:bg-slate-700 text-teal-400 font-bold rounded-xl transition">
+            Settle Full Outstanding
+          </button>
+        </div>
+
+        <div class="flex gap-2 pt-1">
+          <button @click="activeModal = null" class="flex-1 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition">Cancel</button>
+          <button @click="submitKhataSettlement" class="flex-1 py-2 text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition">Record</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- CANVAS FOR 1-BIT MONOCHROME ESC/POS RASTER BITMAPS -->
+<canvas id="thermalRasterCanvas" width="384" height="800" class="hidden"></canvas>
+
+<script>
+// ============================================================================
+// 1. DATA LAYER (DEXIE INDEXED-DB PERSISTENCE)
+// ============================================================================
+const db = new Dexie('UnifiedPosDb');
+db.version(1).stores({
+  products: 'id, code, category, stock',
+  invoices: 'id, timestamp, total, mode',
+  khata: 'phone, name, balance',
+  shift: 'id, active, floatCash, timestamp'
+});
+
+const DEFAULT_INVENTORY = [
+  { id: 1, code: '890103001', category: 'Groceries', name: { en: 'Gujarat Gold Tea 500g', hi: 'गुजरात गोल्ड चाय 500g', gu: 'ગુજરાત ગોલ્ડ ચા ૫૦૦ ગ્રામ' }, price: 280.0, taxRate: 5, stock: 50 },
+  { id: 2, code: '890103002', category: 'Oils', name: { en: 'Tirupati Cottonseed Oil 1L', hi: 'तिरुपति कपासिया तेल 1L', gu: 'તિરુપતિ કપાસિયા તેલ ૧ લીટર' }, price: 145.0, taxRate: 5, stock: 35 },
+  { id: 3, code: '890103003', category: 'Grains', name: { en: 'HMT Kolam Rice 5kg', hi: 'एचएमटी कोलम चावल 5kg', gu: 'એચએમટી કોલમ ચોખા ૫ કિલો' }, price: 340.0, taxRate: 0, stock: 20 },
+  { id: 4, code: '890103004', category: 'Dairy', name: { en: 'Amul Butter 500g', hi: 'अमूल मक्खन 500g', gu: 'અમૂલ બટર ૫૦૦ ગ્રામ' }, price: 275.0, taxRate: 12, stock: 25 },
+  { id: 5, code: '890103005', category: 'Spices', name: { en: 'Everest Turmeric 200g', hi: 'एवरेस्ट हल्दी 200g', gu: 'એવરેસ્ટ હળદર ૨૦૦ ગ્રામ' }, price: 68.0, taxRate: 5, stock: 40 },
+  { id: 6, code: '890103006', category: 'Beverages', name: { en: 'Bisleri Water 1L', hi: 'बिसलेरी पानी 1L', gu: 'બિસ્લેરી પાણી ૧ લીટર' }, price: 20.0, taxRate: 18, stock: 120 }
+];
+
+// ============================================================================
+// 2. COMPLETE TRILINGUAL LEXICON (ENGLISH, HINDI, GUJARATI)
+// ============================================================================
+const lexicon = {
+  en: {
+    tab_pos: 'Counter', tab_parked: 'Parked', tab_inventory: 'Stock', tab_khata: 'Khata', tab_reports: 'Audit',
+    search_placeholder: 'Search product, SKU or scan barcode...',
+    cat_all: 'All Categories', stock: 'Stock', active_cart: 'Current Bill', items_selected: 'lines',
+    park_bill: 'Hold', cart_empty: 'Cart is empty. Tap items to add.', taxable_amt: 'Taxable Value',
+    gst_total: 'Total GST', round_off: 'Round Off', grand_total: 'Net Total', pay_cash: 'Cash',
+    pay_upi: 'UPI QR', pay_card: 'Card', pay_khata: 'Khata', checkout_print: 'Print Receipt & Complete',
+    printer_online: 'Printer Connected', connect_printer: 'Pair Thermal Printer', parked_bills: 'Held Bills Queue',
+    no_parked_bills: 'No held orders currently.', restore_bill: 'Resume Bill', live_inventory: 'Live Inventory List',
+    add_new_sku: 'Add Product', customer_khata: 'Customer Khata Book', no_khata_records: 'No outstanding customer debts.',
+    settle_payment: 'Receive Payment', shift_summary: 'Day-End Audit (Z-Report)', total_sales: 'Lifetime Turnover',
+    invoices_issued: 'Invoices Cleared', credit_outstanding: 'Market Credit Due', recent_bills: 'Recent Transactions',
+    export_backup: 'Export JSON Backup', bill_success: 'Invoice Generated: #', override_rate: 'Edit Rate',
+    auth_required: 'Security PIN Guard', shift_open: 'SHIFT ACTIVE', shift_closed: 'SHIFT CLOSED',
+    close_shift: 'Close Shift', start_shift: 'Start Fresh Shift', scan_barcode: 'Camera Scan', stop_camera: 'Stop Camera'
+  },
+  hi: {
+    tab_pos: 'बिलिंग काउंटर', tab_parked: 'पार्क बिल', tab_inventory: 'स्टॉक सूची', tab_khata: 'उधार खाता', tab_reports: 'रिपोर्ट्स',
+    search_placeholder: 'सामान खोजें या बारकोड स्कैन करें...',
+    cat_all: 'सभी श्रेणियां', stock: 'स्टॉक', active_cart: 'वर्तमान बिल', items_selected: 'आइटम',
+    park_bill: 'होल्ड करें', cart_empty: 'कार्ट खाली है। सामान जोड़ें।', taxable_amt: 'कर योग्य मूल्य',
+    gst_total: 'कुल जीएसटी', round_off: 'राउंड ऑफ', grand_total: 'कुल देय राशि', pay_cash: 'नकद',
+    pay_upi: 'यूपीआई QR', pay_card: 'कार्ड', pay_khata: 'उधार', checkout_print: 'बिल बनाएं और प्रिंट करें',
+    printer_online: 'प्रिंटर कनेक्टेड', connect_printer: 'प्रिंटर जोड़ें', parked_bills: 'होल्ड किए गए बिल',
+    no_parked_bills: 'कोई होल्ड बिल नहीं है।', restore_bill: 'बिल वापस लाएं', live_inventory: 'लाइव स्टॉक रजिस्टर',
+    add_new_sku: 'नया सामान जोड़ें', customer_khata: 'ग्राहक उधार खाता', no_khata_records: 'कोई बकाया उधारी नहीं है।',
+    settle_payment: 'जमा प्राप्त करें', shift_summary: 'डे-एंड ऑडिट (Z-रिपोर्ट)', total_sales: 'कुल बिक्री',
+    invoices_issued: 'कुल बने बिल', credit_outstanding: 'बाजार उधारी', recent_bills: 'हाल के बिल',
+    export_backup: 'डेटा बैकअप लें', bill_success: 'बिल सफलतापूर्वक बना: #', override_rate: 'भाव बदलें',
+    auth_required: 'सुरक्षा पिन आवश्यक', shift_open: 'शिफ्ट चालू', shift_closed: 'शिफ्ट बंद',
+    close_shift: 'शिफ्ट बंद करें', start_shift: 'नई शिफ्ट शुरू करें', scan_barcode: 'कैमरा स्कैनर', stop_camera: 'कैमरा बंद करें'
+  },
+  gu: {
+    tab_pos: 'બિલિંગ કાઉન્ટર', tab_parked: 'હોલ્ડ બિલ', tab_inventory: 'હાજર સ્ટોક', tab_khata: 'ઉધાર ચોપડો', tab_reports: 'હિસાબ રિપોર્ટ',
+    search_placeholder: 'વસ્તુ શોધો અથવા બારકોડ સ્કેન કરો...',
+    cat_all: 'બધી કેટેગરી', stock: 'સ્ટોક', active_cart: 'ચાલુ બિલ', items_selected: 'વસ્તુઓ',
+    park_bill: 'હોલ્ડ કરો', cart_empty: 'કાર્ટ ખાલી છે. વસ્તુ ઉમેરો.', taxable_amt: 'કરપાત્ર રકમ',
+    gst_total: 'કુલ જીએસટી', round_off: 'રાઉન્ડ ઓફ', grand_total: 'કુલ ચોખ્ખી રકમ', pay_cash: 'રોકડ',
+    pay_upi: 'યુપીઆઈ QR', pay_card: 'કાર્ડ મશીન', pay_khata: 'ઉધાર ખાતું', checkout_print: 'બિલ પ્રિન્ટ કરો અને સેવ કરો',
+    printer_online: 'પ્રિન્ટર તૈયાર છે', connect_printer: 'પ્રિન્ટર જોડો', parked_bills: 'હોલ્ડ કરેલા બિલો',
+    no_parked_bills: 'કોઈ બિલ હોલ્ડ પર નથી.', restore_bill: 'બિલ પાછું લાવો', live_inventory: 'લાઈવ સ્ટોક રજીસ્ટર',
+    add_new_sku: 'નવી વસ્તુ ઉમેરો', customer_khata: 'ગ્રાહક ઉધાર ચોપડો', no_khata_records: 'કોઈ બાકી ઉધારી નથી.',
+    settle_payment: 'ઉધારી જમા કરો', shift_summary: 'ડે-એન્ડ ઓડિટ (Z-રિપોર્ટ)', total_sales: 'કુલ વેચાણ ટર્નઓવર',
+    invoices_issued: 'કુલ બનેલા બિલ', credit_outstanding: 'બજારમાં બાકી ઉધારી', recent_bills: 'તાજેતરના બિલ',
+    export_backup: 'બેકઅપ ડાઉનલોડ કરો', bill_success: 'બિલ સેવ થઈ ગયું: #', override_rate: 'ભાવ સુધારો',
+    auth_required: 'સિક્યોરિટી પિન જરૂરી', shift_open: 'શિફ્ટ ચાલુ છે', shift_closed: 'શિફ્ટ બંધ છે',
+    close_shift: 'શિફ્ટ પૂર્ણ કરો', start_shift: 'નવી શિફ્ટ શરૂ કરો', scan_barcode: 'કેમેરા સ્કેનર', stop_camera: 'કેમેરા બંધ કરો'
+  }
+};
+
+// ============================================================================
+// 3. HARDWARE ESC/POS RASTERIZER (NATIVE INDIC SCRIPT ENGINE)
+// ============================================================================
+class EscPosThermalRasterizer {
+  static async renderReceiptToRasterBytes({ config, invoiceId, items, totals, payMode, lang }) {
+    const canvas = document.getElementById('thermalRasterCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    
+    const width = 384; // Standard 58mm thermal dot width
+    const calculatedHeight = 240 + (items.length * 44) + 260;
+    canvas.width = width;
+    canvas.height = calculatedHeight;
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, width, calculatedHeight);
+    ctx.fillStyle = '#000000';
+    ctx.textBaseline = 'top';
+
+    // Header
+    ctx.font = 'bold 20px "Noto Sans Gujarati", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(config.storeName, width / 2, 10);
+
+    ctx.font = '12px "Noto Sans Gujarati", sans-serif';
+    ctx.fillText(config.address, width / 2, 38);
+    ctx.fillText(`GSTIN: ${config.gstin} | MO: ${config.phone}`, width / 2, 56);
+
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.setLineDash([4, 2]);
+    ctx.moveTo(10, 78);
+    ctx.lineTo(width - 10, 78);
+    ctx.stroke();
+
+    // Invoice Details
+    ctx.textAlign = 'left';
+    ctx.font = '12px "Noto Sans Gujarati", sans-serif';
+    ctx.fillText(`Invoice: #${invoiceId}`, 10, 86);
+    ctx.textAlign = 'right';
+    ctx.fillText(new Date().toLocaleDateString('en-IN'), width - 10, 86);
+
+    ctx.beginPath();
+    ctx.moveTo(10, 106);
+    ctx.lineTo(width - 10, 106);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Line Items
+    let cursorY = 116;
+    for (const item of items) {
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 13px "Noto Sans Gujarati", sans-serif';
+      const localizedName = item.name[lang] || item.name.en;
+      ctx.fillText(localizedName, 10, cursorY);
+
+      ctx.font = '12px "Noto Sans Gujarati", sans-serif';
+      ctx.fillText(`${item.qty} x Rs.${item.price.toFixed(2)} (${item.taxRate}% GST)`, 10, cursorY + 18);
+
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 13px "Noto Sans Gujarati", sans-serif';
+      const itemGross = (item.price * item.qty) * (1 + item.taxRate / 100);
+      ctx.fillText(`Rs.${itemGross.toFixed(2)}`, width - 10, cursorY + 18);
+
+      cursorY += 40;
+    }
+
+    // Dividers & Totals
+    ctx.beginPath();
+    ctx.setLineDash([4, 2]);
+    ctx.moveTo(10, cursorY);
+    ctx.lineTo(width - 10, cursorY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    cursorY += 8;
+
+    ctx.textAlign = 'left';
+    ctx.font = '12px "Noto Sans Gujarati", sans-serif';
+    ctx.fillText('Taxable Subtotal:', 10, cursorY);
+    ctx.textAlign = 'right';
+    ctx.fillText(`Rs.${totals.taxable.toFixed(2)}`, width - 10, cursorY);
+    cursorY += 18;
+
+    ctx.textAlign = 'left';
+    ctx.fillText('Total GST Output:', 10, cursorY);
+    ctx.textAlign = 'right';
+    ctx.fillText(`Rs.${totals.gst.toFixed(2)}`, width - 10, cursorY);
+    cursorY += 18;
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 16px "Noto Sans Gujarati", sans-serif';
+    ctx.fillText('NET TOTAL:', 10, cursorY);
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 18px "Noto Sans Gujarati", sans-serif';
+    ctx.fillText(`Rs.${totals.net.toFixed(2)}`, width - 10, cursorY);
+    cursorY += 28;
+
+    ctx.textAlign = 'center';
+    ctx.font = '12px "Noto Sans Gujarati", sans-serif';
+    ctx.fillText(`Payment Mode: ${payMode.toUpperCase()}`, width / 2, cursorY);
+    cursorY += 20;
+
+    // Footer
+    ctx.fillText('આભાર! ફરી પધારશો | Thank You!', width / 2, cursorY);
+
+    // ESC/POS GS v 0 1-bit Monochrome Encoding
+    const imgData = ctx.getImageData(0, 0, width, calculatedHeight);
+    const rgba = imgData.data;
+    const widthBytes = width / 8;
+    const rasterBytes = [];
+
+    // Initialize: ESC @
+    rasterBytes.push(0x1B, 0x40);
+
+    // GS v 0 0 xL xH yL yH
+    const yL = calculatedHeight % 256;
+    const yH = Math.floor(calculatedHeight / 256);
+    rasterBytes.push(0x1D, 0x76, 0x30, 0x00, widthBytes % 256, Math.floor(widthBytes / 256), yL, yH);
+
+    for (let y = 0; y < calculatedHeight; y++) {
+      for (let xByte = 0; xByte < widthBytes; xByte++) {
+        let byteVal = 0;
+        for (let bit = 0; bit < 8; bit++) {
+          const x = (xByte * 8) + bit;
+          const offset = (y * width + x) * 4;
+          const r = rgba[offset];
+          const g = rgba[offset + 1];
+          const b = rgba[offset + 2];
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+          if (luminance < 128) {
+            byteVal |= (1 << (7 - bit));
+          }
+        }
+        rasterBytes.push(byteVal);
+      }
+    }
+
+    // Feed lines & cut command: ESC d 3 + GS V 66 0
+    rasterBytes.push(0x1B, 0x64, 0x03, 0x1D, 0x56, 0x42, 0x00);
+    // Standard Javascript Uint8Array (Resolves runtime crash)
+    return new Uint8Array(rasterBytes);
+  }
+}
+
+// ============================================================================
+// 4. VUE 3 APPLICATION LOGIC CONTROLLER
+// ============================================================================
+const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+createApp({
+  setup() {
+    const lang = ref('gu');
+    const activeTab = ref('pos');
+    const isOnline = ref(navigator.onLine);
+    const printerConnected = ref(false);
+    const cameraActive = ref(false);
+    const bannerNotice = ref(null);
+    const productFilter = ref('');
+    const selectedCategory = ref('all');
+    const activePayMode = ref('cash');
+
+    const khataCustomerPhone = ref('');
+    const khataCustomerName = ref('');
+
+    const inventoryList = ref([]);
+    const activeCart = ref([]);
+    const parkedCarts = ref([]);
+    const khataLedgerList = ref([]);
+    const recentInvoices = ref([]);
+
+    // Shift Management & Security PIN
+    const isShiftOpen = ref(true);
+    const pinPromptActive = ref(false);
+    const enteredPin = ref('');
+    let pendingGuardedAction = null;
+
+    // Zero-Popup Custom Modal States
+    const activeModal = ref(null); // 'priceOverride' | 'addStock' | 'settleKhata'
+    const priceOverrideForm = ref({ idx: -1, name: '', newPrice: 0 });
+    const newStockForm = ref({ nameEn: '', nameHi: '', nameGu: '', price: 0, stock: 0, category: 'General' });
+    const khataSettleForm = ref({ phone: '', name: '', balance: 0, amount: 0 });
+
+    let bluetoothDevice = null;
+    let bluetoothCharacteristic = null;
+    let cameraStream = null;
+    let barcodeDetector = null;
+
+    const cameraVideoRef = ref(null);
+    const barcodeInputRef = ref(null);
+
+    const config = ref({
+      storeName: 'PATEL GENERAL STORE',
+      address: 'Station Road, Vadodara, Gujarat',
+      gstin: '24AAACP1234M1Z2',
+      phone: '9876543210',
+      upiId: 'patelstore@okaxis',
+      securityPin: '1234'
+    });
+
+    const navigationTabs = [
+      { id: 'pos', icon: '🛒', key: 'tab_pos' },
+      { id: 'parked', icon: '⏸️', key: 'tab_parked' },
+      { id: 'inventory', icon: '📦', key: 'tab_inventory' },
+      { id: 'khata', icon: '📒', key: 'tab_khata' },
+      { id: 'reports', icon: '📊', key: 'tab_reports' }
+    ];
+
+    const t = (k) => lexicon[lang.value][k] || k;
+    const setLang = (l) => lang.value = l;
+
+    const playAudioTone = (freq = 880, duration = 0.08) => {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    };
+
+    onMounted(async () => {
+      try {
+        const count = await db.products.count();
+        if (count === 0) {
+          await db.products.bulkAdd(DEFAULT_INVENTORY);
+        }
+        await reloadAllData();
+      } catch (err) {
+        bannerNotice.value = 'DB Load Error: ' + err.message;
+      }
+
+      window.addEventListener('online', () => isOnline.value = true);
+      window.addEventListener('offline', () => isOnline.value = false);
+
+      // Hardware Scanner Keyboard-Wedge Listener
+      let keyBuffer = '';
+      let lastKeyTime = Date.now();
+      window.addEventListener('keydown', (e) => {
+        if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+        const currentTime = Date.now();
+        if (currentTime - lastKeyTime > 100) keyBuffer = '';
+        lastKeyTime = currentTime;
+
+        if (e.key === 'Enter') {
+          if (keyBuffer.length >= 3) {
+            handleBarcodeScanned(keyBuffer);
+            keyBuffer = '';
+          }
+        } else if (e.key.length === 1) {
+          keyBuffer += e.key;
+        }
+      });
+    });
+
+    const reloadAllData = async () => {
+      inventoryList.value = await db.products.toArray();
+      khataLedgerList.value = await db.khata.toArray();
+      recentInvoices.value = await db.invoices.reverse().limit(10).toArray();
+      renderUpiQrMini();
+    };
+
+    const categories = computed(() => {
+      const set = new Set(inventoryList.value.map(p => p.category));
+      return Array.from(set);
+    });
+
+    const visibleProducts = computed(() => {
+      const q = productFilter.value.trim().toLowerCase();
+      return inventoryList.value.filter(p => {
+        const matchCategory = selectedCategory.value === 'all' || p.category === selectedCategory.value;
+        const matchQuery = p.code.includes(q) || p.name[lang.value].toLowerCase().includes(q) || p.name.en.toLowerCase().includes(q);
+        return matchCategory && matchQuery;
+      });
+    });
+
+    const subtotalTaxable = computed(() => {
+      return activeCart.value.reduce((acc, c) => acc + (c.price * c.qty), 0);
+    });
+
+    const totalGst = computed(() => {
+      return activeCart.value.reduce((acc, c) => acc + ((c.price * c.qty) * (c.taxRate / 100)), 0);
+    });
+
+    const rawGross = computed(() => subtotalTaxable.value + totalGst.value);
+    const netPayableTotal = computed(() => Math.round(rawGross.value));
+    const roundOffValue = computed(() => netPayableTotal.value - rawGross.value);
+
+    const lifetimeMetrics = computed(() => {
+      const totalSales = recentInvoices.value.reduce((acc, inv) => acc + inv.total, 0);
+      const khataDebt = khataLedgerList.value.reduce((acc, k) => acc + k.balance, 0);
+      return { totalSales, invoicesCount: recentInvoices.value.length, khataDebt };
+    });
+
+    const handleBarcodeScanned = (barcode) => {
+      const product = inventoryList.value.find(p => p.code === barcode.trim());
+      if (product) {
+        addItemToCart(product);
+        bannerNotice.value = `Scanned: ${product.name[lang.value]}`;
+      } else {
+        bannerNotice.value = `Unknown barcode: ${barcode}`;
+        playAudioTone(300, 0.2);
+      }
+    };
+
+    // Camera Barcode Scanning Engine with Proper Track Cleanup
+    const toggleCameraScanner = async () => {
+      if (cameraActive.value) {
+        if (cameraStream) {
+          cameraStream.getTracks().forEach(track => track.stop());
+          cameraStream = null;
+        }
+        cameraActive.value = false;
+        return;
+      }
+
+      if (!('BarcodeDetector' in window)) {
+        bannerNotice.value = 'BarcodeDetector API not available. Use modern Chrome or a USB hardware scanner.';
+        return;
+      }
+
+      try {
+        barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'qr_code', 'code_128', 'upc_a'] });
+        cameraStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        cameraActive.value = true;
+        await nextTick();
+        
+        if (cameraVideoRef.value) {
+          cameraVideoRef.value.srcObject = cameraStream;
+          try {
+            await cameraVideoRef.value.play();
+          } catch (err) {
+            console.warn('Video playback autoplay guard:', err);
+          }
+        }
+
+        const scanFrame = async () => {
+          if (!cameraActive.value || !cameraVideoRef.value) return;
+          try {
+            const barcodes = await barcodeDetector.detect(cameraVideoRef.value);
+            if (barcodes.length > 0) {
+              handleBarcodeScanned(barcodes[0].rawValue);
+              playAudioTone(1500, 0.08);
+              await new Promise(r => setTimeout(r, 1200));
+            }
+          } catch (e) {}
+          if (cameraActive.value) {
+            requestAnimationFrame(scanFrame);
+          }
+        };
+        requestAnimationFrame(scanFrame);
+      } catch (err) {
+        bannerNotice.value = 'Camera Access Failed: ' + err.message;
+        cameraActive.value = false;
+      }
+    };
+
+    // Security PIN Guard Mechanism
+    const triggerGuardedAction = (action) => {
+      pendingGuardedAction = action;
+      enteredPin.value = '';
+      pinPromptActive.value = true;
+    };
+
+    const appendPin = (digit) => {
+      if (enteredPin.value.length < 4) enteredPin.value += digit;
+    };
+
+    const submitPin = () => {
+      if (enteredPin.value === config.value.securityPin) {
+        pinPromptActive.value = false;
+        const act = pendingGuardedAction;
+        pendingGuardedAction = null;
+        if (act) act();
+      } else {
+        bannerNotice.value = 'Invalid Security PIN. Access Denied.';
+        enteredPin.value = '';
+        playAudioTone(250, 0.25);
+      }
+    };
+
+    // Cart Operations
+    const addItemToCart = (product) => {
+      if (!isShiftOpen.value) {
+        bannerNotice.value = t('shift_closed');
+        return;
+      }
+      if (product.stock <= 0) {
+        bannerNotice.value = `${product.name[lang.value]}: Out of stock`;
+        return;
+      }
+      const existing = activeCart.value.find(c => c.id === product.id);
+      if (existing) {
+        if (existing.qty < product.stock) {
+          existing.qty++;
+          playAudioTone(1200, 0.05);
+        } else {
+          bannerNotice.value = `Available stock limit reached (${product.stock})`;
+        }
+      } else {
+        activeCart.value.push({ ...product, qty: 1 });
+        playAudioTone(880, 0.05);
+      }
+    };
+
+    const updateLineQty = (idx, delta) => {
+      const item = activeCart.value[idx];
+      const prod = inventoryList.value.find(p => p.id === item.id);
+      const stock = prod ? prod.stock : item.stock;
+      const next = item.qty + delta;
+
+      if (next <= 0) {
+        activeCart.value.splice(idx, 1);
+      } else if (next <= stock) {
+        item.qty = next;
+        playAudioTone(1000, 0.04);
+      }
+    };
+
+    // Non-Blocking Price Override Modal Handlers
+    const openPriceOverrideModal = (idx) => {
+      triggerGuardedAction(() => {
+        const item = activeCart.value[idx];
+        priceOverrideForm.value = {
+          idx,
+          name: item.name[lang.value] || item.name.en,
+          newPrice: item.price
+        };
+        activeModal.value = 'priceOverride';
+      });
+    };
+
+    const applyPriceOverride = () => {
+      const { idx, newPrice } = priceOverrideForm.value;
+      if (idx >= 0 && activeCart.value[idx] && !isNaN(newPrice) && newPrice >= 0) {
+        activeCart.value[idx].price = Number(newPrice);
+        bannerNotice.value = `Rate updated to ₹${newPrice}`;
+      }
+      activeModal.value = null;
+    };
+
+    const clearActiveCart = () => { activeCart.value = []; };
+
+    const parkActiveOrder = () => {
+      if (!activeCart.value.length) return;
+      parkedCarts.value.push({
+        timestamp: new Date().toLocaleTimeString(),
+        items: JSON.parse(JSON.stringify(activeCart.value)),
+        total: netPayableTotal.value
+      });
+      activeCart.value = [];
+      bannerNotice.value = 'Ticket parked successfully.';
+    };
+
+    const restoreParkedCart = (idx) => {
+      const target = parkedCarts.value.splice(idx, 1)[0];
+      activeCart.value = target.items;
+      activeTab.value = 'pos';
+    };
+
+    const renderUpiQrMini = () => {
+      nextTick(() => {
+        const canvas = document.getElementById('upiQrMiniCanvas');
+        if (!canvas) return;
+        const upiString = `upi://pay?pa=${config.value.upiId}&pn=${encodeURIComponent(config.value.storeName)}&am=${netPayableTotal.value}&cu=INR`;
+        QRCode.toCanvas(canvas, upiString, { width: 48, margin: 1 });
+      });
+    };
+
+    const connectPrinter = async () => {
+      try {
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }],
+          optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+        });
+
+        bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+          printerConnected.value = false;
+          bluetoothCharacteristic = null;
+          bannerNotice.value = 'Bluetooth printer disconnected.';
+        });
+
+        const server = await bluetoothDevice.gatt.connect();
+        const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+        bluetoothCharacteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+        printerConnected.value = true;
+        bannerNotice.value = 'Thermal Printer Ready!';
+        playAudioTone(1760, 0.15);
+      } catch (e) {
+        bannerNotice.value = 'Bluetooth: ' + e.message;
+      }
+    };
+
+    const transmitPrinterBytes = async (byteArray) => {
+      if (!bluetoothCharacteristic) return;
+      const chunkSize = 100;
+      for (let i = 0; i < byteArray.length; i += chunkSize) {
+        const slice = byteArray.slice(i, i + chunkSize);
+        await bluetoothCharacteristic.writeValue(slice);
+        await new Promise(r => setTimeout(r, 20));
+      }
+    };
+
+    // Atomic Multi-Store Checkout
+    const executeCheckout = async () => {
+      if (!activeCart.value.length || !isShiftOpen.value) return;
+
+      if (activePayMode.value === 'khata' && !khataCustomerPhone.value.trim()) {
+        bannerNotice.value = 'Enter customer phone for Khata billing.';
+        return;
+      }
+
+      const invoiceId = 'INV-' + Date.now().toString().slice(-6);
+      const snapshotItems = JSON.parse(JSON.stringify(activeCart.value));
+      const finalTotals = {
+        taxable: subtotalTaxable.value,
+        gst: totalGst.value,
+        net: netPayableTotal.value
+      };
+
+      try {
+        await db.transaction('rw', db.products, db.invoices, db.khata, async () => {
+          for (const item of snapshotItems) {
+            const current = await db.products.get(item.id);
+            if (current) {
+              await db.products.update(item.id, {
+                stock: Math.max(0, current.stock - item.qty)
+              });
+            }
+          }
+
+          await db.invoices.add({
+            id: invoiceId,
+            timestamp: new Date().toISOString(),
+            total: finalTotals.net,
+            mode: activePayMode.value,
+            items: snapshotItems
+          });
+
+          if (activePayMode.value === 'khata') {
+            const phone = khataCustomerPhone.value.trim();
+            const existing = await db.khata.get(phone);
+            const currentBal = existing ? existing.balance : 0;
+            await db.khata.put({
+              phone,
+              name: khataCustomerName.value.trim() || 'Retail Customer',
+              balance: currentBal + finalTotals.net
+            });
+          }
+        });
+
+        // 1-Bit Monochrome Thermal Print Stream
+        if (printerConnected.value && bluetoothCharacteristic) {
+          try {
+            const rasterBytes = await EscPosThermalRasterizer.renderReceiptToRasterBytes({
+              config: config.value,
+              invoiceId,
+              items: snapshotItems,
+              totals: finalTotals,
+              payMode: activePayMode.value,
+              lang: lang.value
+            });
+            await transmitPrinterBytes(rasterBytes);
+          } catch (pErr) {
+            bannerNotice.value = 'Print transmission error: ' + pErr.message;
+          }
+        }
+
+        playAudioTone(1760, 0.2);
+        bannerNotice.value = `${t('bill_success')}${invoiceId}`;
+        activeCart.value = [];
+        khataCustomerPhone.value = '';
+        khataCustomerName.value = '';
+        await reloadAllData();
+      } catch (err) {
+        bannerNotice.value = 'Transaction failure: ' + err.message;
+      }
+    };
+
+    const replenishStock = async (id, delta) => {
+      const p = await db.products.get(id);
+      if (p) {
+        await db.products.update(id, { stock: p.stock + delta });
+        await reloadAllData();
+        bannerNotice.value = `Replenished +${delta} stock for #${p.code}`;
+      }
+    };
+
+    // Non-Blocking Add Stock SKU Modal Handlers
+    const openAddStockModal = () => {
+      newStockForm.value = {
+        nameEn: '',
+        nameHi: '',
+        nameGu: '',
+        price: 0,
+        stock: 0,
+        category: 'General'
+      };
+      activeModal.value = 'addStock';
+    };
+
+    const saveNewStock = async () => {
+      if (!newStockForm.value.nameEn.trim()) {
+        bannerNotice.value = 'Please provide product name.';
+        return;
+      }
+      const id = Date.now();
+      const code = String(id).slice(-6);
+      await db.products.add({
+        id,
+        code,
+        category: newStockForm.value.category || 'General',
+        name: {
+          en: newStockForm.value.nameEn.trim(),
+          hi: newStockForm.value.nameHi.trim() || newStockForm.value.nameEn.trim(),
+          gu: newStockForm.value.nameGu.trim() || newStockForm.value.nameEn.trim()
+        },
+        price: Number(newStockForm.value.price) || 0,
+        taxRate: 5,
+        stock: Number(newStockForm.value.stock) || 0
+      });
+      activeModal.value = null;
+      await reloadAllData();
+      bannerNotice.value = `Added SKU #${code}`;
+    };
+
+    // Non-Blocking Settle Khata Modal Handlers
+    const openSettleKhataModal = (customer) => {
+      khataSettleForm.value = {
+        phone: customer.phone,
+        name: customer.name,
+        balance: customer.balance,
+        amount: customer.balance
+      };
+      activeModal.value = 'settleKhata';
+    };
+
+    const submitKhataSettlement = async () => {
+      const amt = Number(khataSettleForm.value.amount);
+      if (amt > 0) {
+        const nextBal = Math.max(0, khataSettleForm.value.balance - amt);
+        await db.khata.update(khataSettleForm.value.phone, { balance: nextBal });
+        await reloadAllData();
+        bannerNotice.value = `Updated balance for ${khataSettleForm.value.name}: ₹${nextBal.toFixed(2)}`;
+      }
+      activeModal.value = null;
+    };
+
+    const toggleShiftStatus = () => {
+      isShiftOpen.value = !isShiftOpen.value;
+      bannerNotice.value = isShiftOpen.value ? 'New Shift Opened' : 'Shift Finalized & Closed';
+    };
+
+    const exportDataBackup = async () => {
+      const exportPayload = {
+        store: config.value,
+        products: await db.products.toArray(),
+        invoices: await db.invoices.toArray(),
+        khata: await db.khata.toArray(),
+        exportedAt: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `POS_BACKUP_${Date.now()}.json`;
+      a.click();
+    };
+
+    return {
+      lang, activeTab, isOnline, printerConnected, cameraActive, bannerNotice,
+      productFilter, selectedCategory, activePayMode, khataCustomerPhone, khataCustomerName,
+      inventoryList, activeCart, parkedCarts, khataLedgerList, recentInvoices,
+      isShiftOpen, pinPromptActive, enteredPin, cameraVideoRef, barcodeInputRef,
+      activeModal, priceOverrideForm, newStockForm, khataSettleForm,
+      config, navigationTabs, categories, visibleProducts, subtotalTaxable,
+      totalGst, netPayableTotal, roundOffValue, lifetimeMetrics, t, setLang,
+      addItemToCart, updateLineQty, clearActiveCart, parkActiveOrder, restoreParkedCart,
+      connectPrinter, toggleCameraScanner, executeCheckout, replenishStock,
+      openPriceOverrideModal, applyPriceOverride, openAddStockModal, saveNewStock,
+      openSettleKhataModal, submitKhataSettlement, triggerGuardedAction,
+      appendPin, submitPin, toggleShiftStatus, exportDataBackup
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
