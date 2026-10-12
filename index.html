@@ -1,880 +1,1461 @@
 <!DOCTYPE html>
-<html lang="gu">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Smart Retail POS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#080d1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Apex Enterprise POS 2026</title>
+
+  <!-- PWA Manifest Generated In-line via Data URI -->
+  <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiQXBleCBFbnRlcnByaXNlIFBPUyAyMDI2Iiwic2hvcnRfbmFtZSI6IkFwZXhQT1MiLCJzdGFydF91cmwiOiIuLyIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiMwODBkMWEiLCJ0aGVtZV9jb2xvciI6IiMxMGI5ODEifQ==">
+
+  <!-- Tailwind CSS & Google Fonts -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Core Libraries: Vue 3, Dexie.js (IndexedDB), SheetJS (Excel), Html5-QRCode -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <script src="https://unpkg.com/dexie@3/dist/dexie.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Noto+Sans+Gujarati:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+          colors: {
+            brand: { 50: '#ecfdf5', 500: '#10b981', 600: '#059669', 700: '#047857' },
+            dark: { 800: '#1e293b', 850: '#141e33', 900: '#0f172a', 950: '#080d1a' }
+          }
+        }
+      }
+    }
+  </script>
+
   <style>
-    body { font-family: 'Noto Sans Gujarati', 'Plus Jakarta Sans', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    .glass-card {
+      background: rgba(30, 41, 59, 0.75);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .modal-backdrop {
+      background: rgba(8, 13, 26, 0.85);
+      backdrop-filter: blur(8px);
+    }
+
+    @media print {
+      body * { visibility: hidden; }
+      #printable-receipt, #printable-receipt * { visibility: visible; }
+      #printable-receipt {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80mm;
+        margin: 0;
+        padding: 6px;
+        color: #000 !important;
+        background: #fff !important;
+        font-family: monospace;
+      }
+      .no-print { display: none !important; }
+    }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 h-screen w-screen overflow-hidden select-none flex flex-col justify-between">
 
-<div id="app" class="h-full w-full flex flex-col overflow-hidden relative">
+<body class="bg-dark-950 text-slate-100 antialiased min-h-screen flex flex-col font-sans select-none">
+  <div id="app" class="flex-1 flex flex-col min-h-screen">
 
-  <!-- ================= TOP APP BAR ================= -->
-  <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-lg">
-    <div class="flex items-center space-x-2.5">
-      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-base shadow-md shadow-emerald-500/20">
-        P
-      </div>
-      <div>
-        <h1 class="font-extrabold text-xs text-white leading-tight flex items-center gap-1.5">
-          {{ config.storeName }}
-          <span class="w-2 h-2 rounded-full" :class="isShiftOpen ? 'bg-emerald-400' : 'bg-rose-500'"></span>
-        </h1>
-        <p class="text-[10px] text-slate-400">GSTIN: {{ config.gstin }}</p>
+    <!-- ZERO POPUP TOAST SYSTEM -->
+    <div class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+      <div v-for="toast in toasts" :key="toast.id" 
+           :class="toast.type === 'error' ? 'bg-rose-500/95 border-rose-400' : toast.type === 'warn' ? 'bg-amber-500/95 border-amber-400' : 'bg-emerald-500/95 border-emerald-400'"
+           class="pointer-events-auto px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur text-white font-medium text-xs flex items-center gap-3 border transition-all duration-300">
+        <i :class="toast.type === 'error' ? 'fa-circle-xmark' : toast.type === 'warn' ? 'fa-triangle-exclamation' : 'fa-circle-check'" class="fa-solid text-base"></i>
+        <span>{{ toast.message }}</span>
       </div>
     </div>
 
-    <!-- Quick Tools -->
-    <div class="flex items-center space-x-1.5">
-      <!-- Camera Scan -->
-      <button @click="toggleCameraScanner" :class="cameraActive ? 'bg-teal-500 text-slate-950' : 'bg-slate-800 text-slate-300'" class="p-2 rounded-xl border border-slate-700 text-xs flex items-center justify-center">
-        📷
-      </button>
-
-      <!-- Bluetooth Printer -->
-      <button @click="connectPrinter" :class="printerConnected ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' : 'bg-slate-800 text-slate-400 border-slate-700'" class="p-2 rounded-xl border text-xs flex items-center justify-center">
-        🖨️
-      </button>
-
-      <!-- Language Selector -->
-      <div class="inline-flex rounded-xl bg-slate-950 border border-slate-800 p-0.5">
-        <button @click="setLang('gu')" :class="lang === 'gu' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'" class="px-2 py-1 text-[10px] rounded-lg">ગુ</button>
-        <button @click="setLang('hi')" :class="lang === 'hi' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'" class="px-2 py-1 text-[10px] rounded-lg">हिં</button>
-        <button @click="setLang('en')" :class="lang === 'en' ? 'bg-emerald-500 text-slate-950 font-black' : 'text-slate-400'" class="px-2 py-1 text-[10px] rounded-lg">EN</button>
-      </div>
-    </div>
-  </header>
-
-  <!-- Banner Alerts -->
-  <div v-if="bannerNotice" class="bg-emerald-500/10 border-b border-emerald-500/20 px-3 py-1.5 text-xs text-emerald-300 flex justify-between items-center shrink-0">
-    <span>🔔 {{ bannerNotice }}</span>
-    <button @click="bannerNotice = null" class="font-bold text-sm leading-none">&times;</button>
-  </div>
-
-  <!-- Camera Live View -->
-  <div v-show="cameraActive" class="absolute top-12 left-4 right-4 z-40 bg-slate-900 border border-teal-500 rounded-2xl p-3 shadow-2xl flex flex-col items-center">
-    <div class="w-full flex justify-between items-center mb-2">
-      <span class="text-xs font-bold text-teal-300">બારકોડ સ્કેનર</span>
-      <button @click="toggleCameraScanner" class="text-rose-400 text-sm font-black">&times; બંધ કરો</button>
-    </div>
-    <video ref="cameraVideoRef" autoplay playsinline muted class="w-full h-44 bg-black rounded-xl object-cover"></video>
-  </div>
-
-  <!-- ================= MAIN CONTENT VIEWPORT ================= -->
-  <main class="flex-1 overflow-y-auto px-3 py-2 pb-24 no-scrollbar">
-
-    <!-- 1. COUNTER SCREEN -->
-    <div v-show="activeTab === 'pos'" class="space-y-3">
-      <!-- Search & Category Filters -->
-      <div class="space-y-2">
-        <div class="relative">
-          <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">🔍</span>
-          <input 
-            v-model="productFilter" 
-            type="text" 
-            :placeholder="t('search_placeholder')" 
-            class="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-900 border border-slate-800 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
+    <!-- ZERO POPUP CUSTOM CONFIRM DIALOG -->
+    <div v-if="confirmDialog.show" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+      <div class="glass-card rounded-2xl max-w-sm w-full p-5 space-y-4 border border-slate-700 shadow-2xl">
+        <div class="flex items-center gap-3 text-amber-400">
+          <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+          <h3 class="font-bold text-base text-white">{{ confirmDialog.title }}</h3>
         </div>
-
-        <div class="flex gap-1.5 overflow-x-auto no-scrollbar">
-          <button 
-            @click="selectedCategory = 'all'" 
-            :class="selectedCategory === 'all' ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-900 text-slate-400 border border-slate-800'" 
-            class="px-3 py-1.5 text-xs rounded-xl whitespace-nowrap transition"
-          >
-            {{ t('cat_all') }}
-          </button>
-          <button 
-            v-for="cat in categories" 
-            :key="cat" 
-            @click="selectedCategory = cat" 
-            :class="selectedCategory === cat ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-900 text-slate-400 border border-slate-800'" 
-            class="px-3 py-1.5 text-xs rounded-xl whitespace-nowrap transition"
-          >
-            {{ cat }}
-          </button>
+        <p class="text-xs text-slate-300 leading-relaxed">{{ confirmDialog.message }}</p>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button @click="confirmDialog.show = false" class="px-3 py-1.5 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300 hover:bg-slate-700">Cancel</button>
+          <button @click="executeConfirmAction" class="px-4 py-1.5 rounded-xl bg-rose-600 text-xs font-bold text-white hover:bg-rose-500">Confirm</button>
         </div>
       </div>
+    </div>
 
-      <!-- Modern 2-Column Product Cards -->
-      <div class="grid grid-cols-2 gap-2.5">
-        <div 
-          v-for="p in visibleProducts" 
-          :key="p.id" 
-          @click="addItemToCart(p)"
-          class="bg-slate-900 border border-slate-800 active:scale-95 transition rounded-2xl p-3 flex flex-col justify-between shadow-sm relative overflow-hidden"
-        >
-          <div>
-            <div class="flex justify-between items-center text-[10px] text-slate-400 mb-1">
-              <span>#{{ p.code }}</span>
-              <span :class="p.stock <= 5 ? 'text-rose-400 font-bold' : 'text-slate-400'">સ્ટોક: {{ p.stock }}</span>
-            </div>
-            <h3 class="text-xs font-bold text-white line-clamp-2 leading-snug">{{ p.name[lang] }}</h3>
-          </div>
-
-          <div class="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between">
-            <span class="text-sm font-black text-emerald-400">₹{{ p.price.toFixed(2) }}</span>
-            <span class="w-7 h-7 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-black text-sm">
-              +
+    <!-- TOP HEADER BAR -->
+    <header class="glass-card sticky top-0 z-40 px-4 py-2.5 flex items-center justify-between border-b border-slate-800/80">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-lg shadow-lg shadow-emerald-500/20 text-white">
+          A
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-sm md:text-base leading-tight">{{ activeBranch.name }}</h1>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
+              {{ isGstBill ? 'GST ACTIVE' : 'NON-GST' }}
             </span>
           </div>
+          <p class="text-[11px] text-slate-400">
+            Shift: <span class="text-slate-200 font-semibold">{{ currentShift.cashierName }}</span> | Cash: ₹{{ currentShift.openingCash }}
+          </p>
         </div>
       </div>
-    </div>
 
-    <!-- 2. STOCK SCREEN -->
-    <div v-show="activeTab === 'inventory'" class="space-y-3">
-      <div class="flex justify-between items-center">
-        <h2 class="text-xs font-black uppercase tracking-wider text-slate-300">{{ t('live_inventory') }}</h2>
-        <button @click="triggerGuardedAction(openAddStockModal)" class="px-3 py-1.5 bg-emerald-500 text-slate-950 font-black text-xs rounded-xl shadow-md">
-          + નવી વસ્તુ
+      <div class="flex items-center gap-2">
+        <button @click="openShiftModal" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 flex items-center gap-1.5">
+          <i class="fa-solid fa-clock-rotate-left text-amber-400"></i>
+          <span class="hidden sm:inline">Shift Manager</span>
+        </button>
+        <button @click="activeTab = 'settings'" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 border border-slate-700">
+          <i class="fa-solid fa-sliders text-xs"></i>
         </button>
       </div>
+    </header>
 
-      <div class="space-y-2">
-        <div v-for="item in inventoryList" :key="item.id" class="p-3 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between">
+    <!-- MAIN APP TABS -->
+    <main class="flex-1 flex overflow-hidden">
+
+      <!-- ============================================== -->
+      <!-- TAB 1: BILLING ENGINE (COUNTER VIEW)           -->
+      <!-- ============================================== -->
+      <section v-show="activeTab === 'pos'" class="flex-1 flex flex-col lg:flex-row overflow-hidden w-full">
+        <!-- Products & Search Column -->
+        <div class="flex-1 flex flex-col h-full overflow-hidden border-r border-slate-800/80">
+          
+          <!-- Search & Controls Ribbon -->
+          <div class="p-2.5 bg-dark-900/60 border-b border-slate-800 flex flex-wrap items-center gap-2">
+            <div class="flex-1 min-w-[200px] relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+              <input v-model="searchQuery" type="text" placeholder="Search product or enter barcode..." 
+                     @keyup.enter="handleBarcodeDirectEnter"
+                     class="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl pl-8 pr-16 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500">
+              
+              <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button v-if="settings.voiceSearch" @click="startVoiceSearch" 
+                        class="w-6 h-6 rounded-md bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-xs"
+                        :class="{'text-emerald-400 animate-pulse': isListening}" title="Voice Search">
+                  <i class="fa-solid fa-microphone text-[10px]"></i>
+                </button>
+                <button v-if="settings.cameraScanner" @click="toggleCameraScanner" 
+                        class="w-6 h-6 rounded-md bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-xs"
+                        :class="showScannerModal ? 'text-emerald-400' : 'text-slate-300'" title="Camera Barcode">
+                  <i class="fa-solid fa-camera text-[10px]"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Category Filter Strip -->
+            <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+              <button @click="selectedCategory = 'ALL'" 
+                      :class="selectedCategory === 'ALL' ? 'bg-emerald-500 text-white font-bold' : 'bg-slate-800 text-slate-400'"
+                      class="px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-all">
+                All
+              </button>
+              <button v-for="cat in categories" :key="cat" @click="selectedCategory = cat"
+                      :class="selectedCategory === cat ? 'bg-emerald-500 text-white font-bold' : 'bg-slate-800 text-slate-400'"
+                      class="px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-all">
+                {{ cat }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Real HTML5 Barcode Video Scanner Element -->
+          <div v-show="showScannerModal" class="p-2.5 bg-black/90 border-b border-emerald-500/30 flex flex-col items-center justify-center relative">
+            <div id="barcode-reader-box" class="w-full max-w-xs overflow-hidden rounded-xl"></div>
+            <button @click="stopCameraScanner" class="mt-2 text-xs bg-rose-600/80 hover:bg-rose-500 px-3 py-1 rounded-lg font-semibold text-white">
+              Stop Scanner
+            </button>
+          </div>
+
+          <!-- Product Grid View -->
+          <div class="flex-1 overflow-y-auto p-2.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
+            <div v-for="item in filteredProducts" :key="item.id" @click="addToCart(item)"
+                 class="glass-card hover:border-emerald-500/50 rounded-xl p-2.5 flex flex-col justify-between cursor-pointer transition-all active:scale-[0.98] relative">
+              
+              <span v-if="item.stock <= item.minStock" class="absolute top-1.5 right-1.5 px-1.5 py-0.2 rounded text-[9px] bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold">
+                Low: {{ item.stock }}
+              </span>
+
+              <div>
+                <span class="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">{{ item.category }}</span>
+                <h3 class="font-bold text-xs text-slate-100 line-clamp-2 mt-0.5">{{ item.name }}</h3>
+                <p class="text-[10px] text-slate-500 mt-0.5">Code: {{ item.barcode }}</p>
+              </div>
+
+              <div class="mt-2 pt-1.5 border-t border-slate-800/80 flex items-center justify-between">
+                <div>
+                  <span class="text-emerald-400 font-extrabold text-xs">₹{{ item.sellingPrice }}</span>
+                  <span class="text-[9px] text-slate-500">/{{ item.unit }}</span>
+                </div>
+                <div class="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[10px] text-slate-300">
+                  <i class="fa-solid fa-plus"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cart Sidebar Area -->
+        <div class="w-full lg:w-[390px] glass-card flex flex-col h-full border-t lg:border-t-0 lg:border-l border-slate-800">
+          
+          <div class="p-2.5 border-b border-slate-800 flex items-center justify-between bg-dark-900/40">
+            <div>
+              <h2 class="font-bold text-xs flex items-center gap-2">
+                <span>Active Bill Cart</span>
+                <span class="px-2 py-0.2 rounded-full bg-slate-800 text-[10px] font-semibold text-slate-300">{{ cart.length }} items</span>
+              </h2>
+              <div v-if="settings.staffTracking" class="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5">
+                <span>Staff:</span>
+                <select v-model="selectedStaffId" class="bg-slate-800 text-slate-200 text-[11px] rounded px-1.5 py-0.5 border border-slate-700 focus:outline-none">
+                  <option v-for="s in staffList" :key="s.id" :value="s.id">{{ s.name }} ({{ s.code }})</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <button @click="isGstBill = !isGstBill" 
+                      class="px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors"
+                      :class="isGstBill ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'">
+                {{ isGstBill ? 'GST (ON)' : 'NON-GST' }}
+              </button>
+              <button @click="resetCart" class="w-7 h-7 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 flex items-center justify-center text-xs" title="Reset Cart">
+                <i class="fa-solid fa-trash-can text-[10px]"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Cart Items Scroll -->
+          <div class="flex-1 overflow-y-auto p-2 space-y-1.5">
+            <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-slate-500 py-12">
+              <i class="fa-solid fa-cart-shopping text-3xl mb-2 opacity-25"></i>
+              <p class="text-xs">Cart is empty. Tap items to add.</p>
+            </div>
+
+            <div v-for="(ci, idx) in cart" :key="ci.id" class="p-2 rounded-xl bg-slate-800/40 border border-slate-700/40 flex items-center justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-xs text-slate-200 truncate">{{ ci.name }}</h4>
+                <div class="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400">
+                  <span>₹{{ ci.sellingPrice }} × {{ ci.qty }}</span>
+                  <span v-if="isGstBill" class="text-emerald-400">({{ ci.gstRate }}% GST)</span>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1">
+                <button @click="updateCartQty(idx, -1)" class="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-xs font-bold">-</button>
+                <span class="w-6 text-center text-xs font-bold">{{ ci.qty }}</span>
+                <button @click="updateCartQty(idx, 1)" class="w-5 h-5 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-xs font-bold">+</button>
+              </div>
+
+              <div class="text-right min-w-[50px]">
+                <span class="text-xs font-bold text-slate-100">₹{{ (ci.sellingPrice * ci.qty).toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Checkout Controls -->
+          <div class="p-2.5 border-t border-slate-800 bg-dark-900/60 space-y-2">
+            <div class="space-y-0.5 text-[11px]">
+              <div class="flex justify-between text-slate-400">
+                <span>Taxable Amount:</span>
+                <span>₹{{ cartTotals.taxable.toFixed(2) }}</span>
+              </div>
+              <div v-if="isGstBill" class="flex justify-between text-slate-400">
+                <span>GST Tax (IGST/CGST/SGST):</span>
+                <span class="text-emerald-400">+ ₹{{ cartTotals.tax.toFixed(2) }}</span>
+              </div>
+              <div class="flex justify-between text-xs font-black pt-1 border-t border-slate-800">
+                <span>Net Total Payable:</span>
+                <span class="text-emerald-400 text-sm">₹{{ cartTotals.grandTotal.toFixed(2) }}</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-4 gap-1 text-[11px] font-semibold">
+              <button v-for="mode in ['CASH', 'UPI', 'CARD', 'UDHARI']" :key="mode" @click="paymentMode = mode"
+                      :class="paymentMode === mode ? 'bg-emerald-500 text-white font-bold' : 'bg-slate-800 text-slate-300'"
+                      class="py-1 rounded-lg border border-slate-700 text-center">
+                {{ mode }}
+              </button>
+            </div>
+
+            <!-- Dynamic UPI QR Display -->
+            <div v-if="paymentMode === 'UPI'" class="p-2 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center gap-3">
+              <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=upi://pay?pa=' + activeBranch.upiId + '&pn=' + activeBranch.name + '&am=' + cartTotals.grandTotal" class="w-12 h-12 rounded bg-white p-0.5" alt="UPI QR">
+              <div class="text-[11px]">
+                <p class="font-bold text-slate-200">Scan & Pay ₹{{ cartTotals.grandTotal.toFixed(2) }}</p>
+                <p class="text-[9px] text-slate-400">UPI ID: {{ activeBranch.upiId }}</p>
+              </div>
+            </div>
+
+            <div v-if="paymentMode === 'UDHARI'" class="flex gap-1.5">
+              <input v-model="customerPhone" type="tel" placeholder="Mobile No..." class="w-1/2 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none">
+              <input v-model="customerName" type="text" placeholder="Customer Name..." class="w-1/2 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs focus:outline-none">
+            </div>
+
+            <!-- Action Dispatch Buttons: Zero Dummy Functions -->
+            <div class="grid grid-cols-3 gap-1.5 pt-0.5">
+              <button @click="completeSale(false, 'SAVE')" :disabled="cart.length === 0"
+                      class="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 font-bold text-xs flex flex-col items-center justify-center border border-slate-700">
+                <i class="fa-solid fa-bolt mb-0.5 text-amber-400"></i>
+                <span>Quick Save</span>
+              </button>
+
+              <button @click="completeSale(true, 'PRINT')" :disabled="cart.length === 0"
+                      class="py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold text-xs flex flex-col items-center justify-center shadow-lg shadow-emerald-600/30">
+                <i class="fa-solid fa-print mb-0.5"></i>
+                <span>Print Bill</span>
+              </button>
+
+              <button @click="completeSale(false, 'WHATSAPP')" :disabled="cart.length === 0"
+                      class="py-2 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white font-bold text-xs flex flex-col items-center justify-center shadow-lg shadow-teal-600/30">
+                <i class="fa-brands fa-whatsapp mb-0.5 text-emerald-200"></i>
+                <span>WhatsApp</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 2: INVENTORY & STOCK (FULL CRUD)           -->
+      <!-- ============================================== -->
+      <section v-show="activeTab === 'inventory'" class="flex-1 flex flex-col overflow-y-auto p-4 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <div>
-            <span class="text-[10px] text-slate-500 font-mono">#{{ item.code }}</span>
-            <h4 class="text-xs font-bold text-white">{{ item.name[lang] }}</h4>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="text-xs font-extrabold text-emerald-400">₹{{ item.price.toFixed(2) }}</span>
-              <span class="text-[10px] px-2 py-0.5 rounded-full" :class="item.stock <= 5 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30 font-bold' : 'bg-slate-800 text-slate-400'">
-                સ્ટોક: {{ item.stock }}
+            <h2 class="text-lg font-bold">Catalog & Inventory Master</h2>
+            <p class="text-xs text-slate-400">Persistent IndexedDB | Total Products: {{ products.length }}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button @click="exportExcel" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-file-excel text-emerald-400"></i> Excel Export
+            </button>
+            <label class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-700 flex items-center gap-1.5 cursor-pointer">
+              <i class="fa-solid fa-file-arrow-up text-indigo-400"></i> Excel Import
+              <input type="file" @change="importExcel" accept=".xlsx, .xls, .csv" class="hidden">
+            </label>
+            <button @click="openProductModal()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white flex items-center gap-1.5">
+              <i class="fa-solid fa-plus"></i> Add Product
+            </button>
+          </div>
+        </div>
+
+        <div class="glass-card rounded-2xl overflow-hidden border border-slate-800">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-800/80 text-slate-400 uppercase font-semibold">
+              <tr>
+                <th class="p-3">Item Name</th>
+                <th class="p-3">Barcode</th>
+                <th class="p-3">Category</th>
+                <th class="p-3">Cost</th>
+                <th class="p-3">Selling Price</th>
+                <th class="p-3">GST Slab</th>
+                <th class="p-3">Current Stock</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <tr v-for="p in products" :key="p.id" class="hover:bg-slate-800/40">
+                <td class="p-3 font-semibold text-slate-200">{{ p.name }}</td>
+                <td class="p-3 text-slate-400 font-mono">{{ p.barcode }}</td>
+                <td class="p-3"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300">{{ p.category }}</span></td>
+                <td class="p-3 text-slate-400">₹{{ p.costPrice }}</td>
+                <td class="p-3 font-bold text-emerald-400">₹{{ p.sellingPrice }}</td>
+                <td class="p-3 text-slate-300">{{ p.gstRate }}%</td>
+                <td class="p-3">
+                  <span :class="p.stock <= p.minStock ? 'text-rose-400 font-black' : 'text-slate-200 font-semibold'">
+                    {{ p.stock }} {{ p.unit }}
+                  </span>
+                </td>
+                <td class="p-3 text-right space-x-1">
+                  <button @click="openWastageModal(p)" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400" title="Wastage Deduct">
+                    <i class="fa-solid fa-ban"></i>
+                  </button>
+                  <button @click="openProductModal(p)" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" title="Edit">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                  <button @click="confirmDeleteProduct(p.id)" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-rose-400" title="Delete">
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 3: STAFF & COMMISSION (REAL CALCULATIONS)  -->
+      <!-- ============================================== -->
+      <section v-show="activeTab === 'staff'" class="flex-1 flex flex-col overflow-y-auto p-4 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-lg font-bold">Staff Directory & Incentive Tracker</h2>
+            <p class="text-xs text-slate-400">Real commission computed directly from Dexie sales records</p>
+          </div>
+          <button @click="openStaffModal" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold text-white flex items-center gap-1.5">
+            <i class="fa-solid fa-user-plus"></i> Add Staff
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div v-for="st in staffList" :key="st.id" class="glass-card rounded-2xl p-4 border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="font-bold text-sm text-slate-100">{{ st.name }}</h3>
+                <p class="text-xs text-slate-400">Code: {{ st.code }} | {{ st.role }}</p>
+              </div>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400">
+                {{ st.commissionRate }}% Commission
               </span>
             </div>
-          </div>
-          <div class="flex gap-1.5">
-            <button @click="triggerGuardedAction(() => replenishStock(item.id, 10))" class="px-2.5 py-1.5 bg-slate-800 border border-slate-700 text-xs font-bold text-white rounded-xl">+10</button>
-            <button @click="triggerGuardedAction(() => replenishStock(item.id, 50))" class="px-2.5 py-1.5 bg-slate-800 border border-slate-700 text-xs font-bold text-white rounded-xl">+50</button>
+
+            <div class="p-2.5 rounded-xl bg-slate-800/60 grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span class="text-slate-400 text-[10px]">Real Total Sales:</span>
+                <p class="font-bold text-slate-100 text-sm">₹{{ getStaffStats(st.id).totalSales.toFixed(2) }}</p>
+              </div>
+              <div>
+                <span class="text-slate-400 text-[10px]">Earned Incentive:</span>
+                <p class="font-bold text-emerald-400 text-sm">₹{{ getStaffStats(st.id).incentive.toFixed(2) }}</p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1">
+              <button @click="sendStaffReportWhatsapp(st)" class="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-emerald-400 border border-slate-700 flex items-center justify-center gap-1">
+                <i class="fa-brands fa-whatsapp"></i> WhatsApp Report
+              </button>
+              <button @click="confirmDeleteStaff(st.id)" class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold">
+                Delete
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- 3. KHATA BOOK SCREEN -->
-    <div v-show="activeTab === 'khata'" class="space-y-3">
-      <h2 class="text-xs font-black uppercase tracking-wider text-slate-300">{{ t('customer_khata') }}</h2>
-      <div v-if="!khataLedgerList.length" class="text-center py-16 text-slate-500 text-xs">
-        કોઈ ગ્રાહકની ઉધારી બાકી નથી.
-      </div>
-      <div class="space-y-2">
-        <div v-for="c in khataLedgerList" :key="c.phone" class="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between">
+      <!-- ============================================== -->
+      <!-- TAB 4: MULTI-BRANCH LOGISTICS & TRANSFERS      -->
+      <!-- ============================================== -->
+      <section v-show="activeTab === 'branches'" class="flex-1 flex flex-col overflow-y-auto p-4 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
           <div>
-            <h4 class="text-xs font-bold text-white">{{ c.name }}</h4>
-            <p class="text-[11px] text-slate-400 font-mono">📞 {{ c.phone }}</p>
-            <p class="text-xs font-black text-rose-400 mt-1">બાકી રકમ: ₹{{ c.balance.toFixed(2) }}</p>
+            <h2 class="text-lg font-bold">Multi-Branch Logistics</h2>
+            <p class="text-xs text-slate-400">Inter-branch inventory transfer vouchers with automated deduction</p>
           </div>
-          <button @click="openSettleKhataModal(c)" class="px-3 py-1.5 bg-emerald-500 text-slate-950 font-black text-xs rounded-xl shadow-md">
-            જમા લો
+          <button @click="openTransferModal" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold text-white flex items-center gap-1.5">
+            <i class="fa-solid fa-arrow-right-arrow-left"></i> New Stock Transfer
           </button>
         </div>
-      </div>
-    </div>
 
-    <!-- 4. AUDIT & REPORT SCREEN -->
-    <div v-show="activeTab === 'reports'" class="space-y-3">
-      <div class="flex justify-between items-center">
-        <h2 class="text-xs font-black uppercase tracking-wider text-slate-300">દૈનિક હિસાબ રિપોર્ટ</h2>
-        <button @click="triggerGuardedAction(toggleShiftStatus)" :class="isShiftOpen ? 'bg-rose-500/10 text-rose-300 border-rose-500/30' : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'" class="px-3 py-1.5 border text-xs font-bold rounded-xl">
-          {{ isShiftOpen ? 'શિફ્ટ બંધ કરો' : 'નવી શિફ્ટ' }}
-        </button>
-      </div>
-
-      <div class="grid grid-cols-2 gap-2">
-        <div class="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl">
-          <span class="text-[10px] text-slate-400 font-bold block">કુલ વેચાણ</span>
-          <span class="text-base font-black text-emerald-400 mt-0.5 block">₹{{ lifetimeMetrics.totalSales.toFixed(2) }}</span>
-        </div>
-        <div class="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl">
-          <span class="text-[10px] text-slate-400 font-bold block">કુલ બિલ</span>
-          <span class="text-base font-black text-white mt-0.5 block">{{ lifetimeMetrics.invoicesCount }}</span>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
-        <h3 class="text-xs font-bold text-white mb-2">તાજેતરના બિલ</h3>
-        <div class="space-y-1.5 max-h-60 overflow-y-auto no-scrollbar">
-          <div v-for="inv in recentInvoices" :key="inv.id" class="p-2 bg-slate-950 border border-slate-800/80 rounded-xl flex justify-between items-center text-xs">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div v-for="b in branches" :key="b.id" 
+               :class="activeBranch.id === b.id ? 'border-emerald-500 bg-slate-800/80 shadow-lg shadow-emerald-500/10' : 'border-slate-800 bg-slate-900/60'"
+               class="glass-card rounded-2xl p-4 border flex items-center justify-between">
             <div>
-              <span class="font-bold text-white">#{{ inv.id }}</span>
-              <span class="text-slate-500 text-[10px] ml-1">{{ (inv.timestamp || '').substring(11, 16) }}</span>
+              <h3 class="font-bold text-sm text-slate-100">{{ b.name }}</h3>
+              <p class="text-xs text-slate-400">{{ b.address }}</p>
+              <p class="text-[11px] text-slate-500 font-mono mt-0.5">GSTIN: {{ b.gstin || 'Unregistered' }} | UPI: {{ b.upiId }}</p>
             </div>
-            <span class="font-black text-emerald-400">₹{{ inv.total.toFixed(2) }}</span>
+            <button v-if="activeBranch.id !== b.id" @click="switchBranch(b)" 
+                    class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-slate-200 border border-slate-700">
+              Switch
+            </button>
+            <span v-else class="text-xs font-bold text-emerald-400 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">Active</span>
           </div>
         </div>
-      </div>
-    </div>
 
-  </main>
-
-  <!-- ================= FLOATING MOBILE CART BAR ================= -->
-  <div v-if="activeCart.length && !cartDrawerOpen" class="fixed bottom-16 left-3 right-3 z-30 animate-bounce">
-    <div 
-      @click="cartDrawerOpen = true"
-      class="bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-between cursor-pointer active:scale-95 transition"
-    >
-      <div class="flex items-center gap-2">
-        <span class="text-lg">🛒</span>
-        <div>
-          <span class="text-xs font-black block leading-none">{{ activeCart.length }} વસ્તુઓ પસંદ કરી</span>
-          <span class="text-[10px] opacity-80">બિલ જોવા અહીં ક્લિક કરો</span>
+        <h3 class="font-bold text-xs text-slate-300 mt-2">Transfer Voucher Logs</h3>
+        <div class="glass-card rounded-2xl overflow-hidden border border-slate-800">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-800/80 text-slate-400 uppercase font-semibold">
+              <tr>
+                <th class="p-2.5">Date & Time</th>
+                <th class="p-2.5">Source -> Dest</th>
+                <th class="p-2.5">Item Transferred</th>
+                <th class="p-2.5">Quantity</th>
+                <th class="p-2.5">Reason Note</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <tr v-for="t in transferLogs" :key="t.id">
+                <td class="p-2.5 font-mono text-slate-400">{{ t.timestamp }}</td>
+                <td class="p-2.5 font-semibold text-slate-200">{{ t.fromBranch }} -> {{ t.toBranch }}</td>
+                <td class="p-2.5 text-emerald-400 font-bold">{{ t.itemName }}</td>
+                <td class="p-2.5">{{ t.qty }}</td>
+                <td class="p-2.5 text-slate-400">{{ t.note }}</td>
+              </tr>
+              <tr v-if="transferLogs.length === 0">
+                <td colspan="5" class="p-4 text-center text-slate-500">No transfer vouchers recorded.</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <span class="text-base font-black">₹{{ netPayableTotal.toFixed(2) }}</span>
-        <span class="bg-slate-950/20 px-2 py-1 rounded-lg text-xs font-black">આગળ 👉</span>
-      </div>
-    </div>
-  </div>
+      </section>
 
-  <!-- ================= BOTTOM NAVIGATION BAR ================= -->
-  <nav class="fixed bottom-0 left-0 right-0 h-14 bg-slate-900 border-t border-slate-800 flex items-center justify-around z-20 px-2">
-    <button 
-      v-for="tab in navigationTabs" 
-      :key="tab.id" 
-      @click="activeTab = tab.id"
-      :class="activeTab === tab.id ? 'text-emerald-400 font-black' : 'text-slate-400'"
-      class="flex flex-col items-center justify-center flex-1 py-1"
-    >
-      <span class="text-base">{{ tab.icon }}</span>
-      <span class="text-[10px] mt-0.5">{{ t(tab.key) }}</span>
-    </button>
-  </nav>
-
-  <!-- ================= CART / BILL SLIDE-UP MODAL ================= -->
-  <div v-if="cartDrawerOpen" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end">
-    <div class="bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-      
-      <!-- Drawer Header -->
-      <div class="p-3.5 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-        <div>
-          <h2 class="text-xs font-black text-white">ચાલુ બિલ (Current Bill)</h2>
-          <p class="text-[10px] text-slate-400">{{ activeCart.length }} લાઇન</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <button @click="clearActiveCart(); cartDrawerOpen = false" class="text-rose-400 text-xs px-2 py-1 bg-rose-500/10 rounded-lg">ખાલી કરો</button>
-          <button @click="cartDrawerOpen = false" class="text-white text-base px-2 py-1 bg-slate-800 rounded-lg">&times;</button>
-        </div>
-      </div>
-
-      <!-- Item Rows -->
-      <div class="p-3 overflow-y-auto space-y-2 flex-1 no-scrollbar">
-        <div v-for="(line, idx) in activeCart" :key="line.id" class="p-2.5 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between">
-          <div class="flex-1 min-w-0 pr-2">
-            <h4 class="text-xs font-bold text-white truncate">{{ line.name[lang] }}</h4>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-[10px] text-slate-400">₹{{ line.price.toFixed(2) }}</span>
-              <button @click="openPriceOverrideModal(idx)" class="text-[9px] text-emerald-400 font-bold underline">[ભાવ બદલો]</button>
-            </div>
+      <!-- ============================================== -->
+      <!-- TAB 5: ANALYTICS & GST COMPLIANCE EXPORT       -->
+      <!-- ============================================== -->
+      <section v-show="activeTab === 'analytics'" class="flex-1 flex flex-col overflow-y-auto p-4 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-lg font-bold">Analytics & GSTR Compliance Export</h2>
+            <p class="text-xs text-slate-400">Direct CA GSTR-1, 3B summaries and profit metrics</p>
           </div>
-          
-          <div class="flex items-center gap-2">
-            <div class="flex items-center bg-slate-800 rounded-lg p-0.5">
-              <button @click="updateLineQty(idx, -1)" class="w-6 h-6 flex items-center justify-center font-bold text-slate-300">-</button>
-              <span class="w-6 text-center text-xs font-black text-white">{{ line.qty }}</span>
-              <button @click="updateLineQty(idx, 1)" class="w-6 h-6 flex items-center justify-center font-bold text-slate-300">+</button>
-            </div>
-            <span class="w-14 text-right text-xs font-black text-emerald-400">
-              ₹{{ ((line.price * line.qty) * (1 + line.taxRate / 100)).toFixed(2) }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Payment & Grand Total -->
-      <div class="p-3 bg-slate-950 border-t border-slate-800 space-y-2.5">
-        <div class="flex justify-between items-baseline">
-          <span class="text-xs text-slate-400">ચૂકવવાપાત્ર રકમ (Net Total):</span>
-          <span class="text-xl font-black text-emerald-400">₹{{ netPayableTotal.toFixed(2) }}</span>
-        </div>
-
-        <!-- Mode Buttons -->
-        <div class="grid grid-cols-4 gap-1">
-          <button 
-            v-for="mode in ['cash', 'upi', 'card', 'khata']" 
-            :key="mode" 
-            @click="setPaymentMode(mode)"
-            :class="activePayMode === mode ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-800 text-slate-400'"
-            class="py-2 text-[11px] rounded-xl font-bold uppercase transition"
-          >
-            {{ t('pay_' + mode) }}
+          <button @click="exportGstReport" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold text-white flex items-center gap-1.5">
+            <i class="fa-solid fa-file-arrow-down"></i> Export GSTR JSON
           </button>
         </div>
 
-        <!-- Khata Phone -->
-        <div v-if="activePayMode === 'khata'" class="space-y-1.5 p-2 bg-slate-900 border border-slate-800 rounded-xl">
-          <input v-model="khataCustomerPhone" type="tel" placeholder="ગ્રાહકનો મોબાઈલ નંબર" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white" />
-          <input v-model="khataCustomerName" type="text" placeholder="ગ્રાહકનું નામ" class="w-full px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white" />
-        </div>
-
-        <!-- Dynamic UPI QR -->
-        <div v-if="activePayMode === 'upi'" class="p-2 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
-          <div class="text-[11px] text-slate-400">
-            <span class="text-white font-bold block">{{ config.upiId }}</span>
-            PhonePe, GPay, Paytm થી સ્કેન કરો
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="glass-card p-3 rounded-2xl border border-slate-800">
+            <span class="text-xs text-slate-400">Total Turnover</span>
+            <p class="text-base font-black text-slate-100 mt-1">₹{{ salesMetrics.totalTurnover.toFixed(2) }}</p>
           </div>
-          <canvas id="upiQrMiniCanvas" class="w-14 h-14 bg-white rounded-lg"></canvas>
+          <div class="glass-card p-3 rounded-2xl border border-slate-800">
+            <span class="text-xs text-slate-400">Net Estimated Profit</span>
+            <p class="text-base font-black text-emerald-400 mt-1">₹{{ salesMetrics.netProfit.toFixed(2) }}</p>
+          </div>
+          <div class="glass-card p-3 rounded-2xl border border-slate-800">
+            <span class="text-xs text-slate-400">Total GST Liability</span>
+            <p class="text-base font-black text-teal-400 mt-1">₹{{ salesMetrics.gstCollected.toFixed(2) }}</p>
+          </div>
+          <div class="glass-card p-3 rounded-2xl border border-slate-800">
+            <span class="text-xs text-slate-400">Total Sales Count</span>
+            <p class="text-base font-black text-indigo-400 mt-1">{{ salesHistory.length }}</p>
+          </div>
         </div>
 
-        <!-- Checkout Button -->
-        <button 
-          @click="executeCheckout"
-          class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-400 active:scale-95 transition text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2"
-        >
-          <span>⚡ બિલ બનાવો અને પ્રિન્ટ કરો</span>
-        </button>
-      </div>
+        <h3 class="font-bold text-xs text-slate-300">GST Slab-wise Breakdown</h3>
+        <div class="glass-card rounded-2xl overflow-hidden border border-slate-800">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-800/80 text-slate-400 uppercase font-semibold">
+              <tr>
+                <th class="p-2.5">Tax Slab</th>
+                <th class="p-2.5">Taxable Value</th>
+                <th class="p-2.5">CGST</th>
+                <th class="p-2.5">SGST</th>
+                <th class="p-2.5">Total Tax</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <tr v-for="slab in [0, 5, 12, 18, 28]" :key="slab">
+                <td class="p-2.5 font-bold text-slate-200">{{ slab }}% Slab</td>
+                <td class="p-2.5">₹{{ getGstSlabTotal(slab).taxable.toFixed(2) }}</td>
+                <td class="p-2.5 text-slate-400">₹{{ (getGstSlabTotal(slab).tax / 2).toFixed(2) }}</td>
+                <td class="p-2.5 text-slate-400">₹{{ (getGstSlabTotal(slab).tax / 2).toFixed(2) }}</td>
+                <td class="p-2.5 font-bold text-emerald-400">₹{{ getGstSlabTotal(slab).tax.toFixed(2) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
+      <!-- ============================================== -->
+      <!-- TAB 6: SETTINGS & MASTER TOGGLES (ZERO BLOAT)  -->
+      <!-- ============================================== -->
+      <section v-show="activeTab === 'settings'" class="flex-1 flex flex-col overflow-y-auto p-4 space-y-4 max-w-4xl mx-auto w-full">
+        <div class="border-b border-slate-800 pb-3">
+          <h2 class="text-lg font-bold">Master Settings & Module Controls</h2>
+          <p class="text-xs text-slate-400">Turn features ON/OFF instantly. Unused modules will not render.</p>
+        </div>
+
+        <!-- Secure PIN Change Form -->
+        <div class="glass-card rounded-2xl p-4 border border-slate-800 space-y-3">
+          <h3 class="font-bold text-xs flex items-center gap-2">
+            <i class="fa-solid fa-lock text-amber-400"></i> Secure Admin PIN Management
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input v-model="pinForm.oldPin" type="password" placeholder="Current PIN" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none">
+            <input v-model="pinForm.newPin" type="password" placeholder="New 4-digit PIN" class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none">
+            <button @click="updateAdminPin" class="bg-emerald-600 hover:bg-emerald-500 font-bold text-xs rounded-xl px-4 py-2 text-white">
+              Update PIN
+            </button>
+          </div>
+        </div>
+
+        <!-- Master Toggles Grid -->
+        <div class="glass-card rounded-2xl p-4 border border-slate-800 space-y-3">
+          <h3 class="font-bold text-xs text-slate-300">Feature Toggle Board</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div v-for="(val, key) in settings" :key="key" class="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/60 flex items-center justify-between">
+              <div>
+                <p class="text-xs font-bold text-slate-200 capitalize">{{ formatSettingName(key) }}</p>
+                <span class="text-[10px] text-slate-500">Toggle module system-wide</span>
+              </div>
+              <button @click="settings[key] = !settings[key]; saveSettings()" 
+                      :class="settings[key] ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'"
+                      class="w-11 h-6 rounded-full p-1 flex items-center transition-all">
+                <div class="w-4 h-4 rounded-full bg-white shadow-md"></div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Database Purge / Factory Reset -->
+        <div class="glass-card rounded-2xl p-4 border border-slate-800 flex items-center justify-between">
+          <div>
+            <h4 class="font-bold text-xs text-rose-400">Factory Reset IndexedDB</h4>
+            <p class="text-[10px] text-slate-500">Wipes all cached data and re-seeds clean demo data.</p>
+          </div>
+          <button @click="triggerFactoryResetConfirm" class="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 text-xs font-bold border border-rose-500/30">
+            Factory Reset
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- BOTTOM APP NAVIGATION DOCK -->
+    <nav class="glass-card sticky bottom-0 z-40 border-t border-slate-800 px-3 py-2 flex items-center justify-around">
+      <button @click="activeTab = 'pos'" :class="activeTab === 'pos' ? 'text-emerald-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center gap-1 text-[10px]">
+        <i class="fa-solid fa-cash-register text-sm"></i>
+        <span>Billing</span>
+      </button>
+
+      <button @click="activeTab = 'inventory'" :class="activeTab === 'inventory' ? 'text-emerald-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center gap-1 text-[10px]">
+        <i class="fa-solid fa-boxes-stacked text-sm"></i>
+        <span>Catalog</span>
+      </button>
+
+      <button v-if="settings.staffTracking" @click="activeTab = 'staff'" :class="activeTab === 'staff' ? 'text-emerald-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center gap-1 text-[10px]">
+        <i class="fa-solid fa-user-group text-sm"></i>
+        <span>Staff</span>
+      </button>
+
+      <button v-if="settings.multiBranch" @click="activeTab = 'branches'" :class="activeTab === 'branches' ? 'text-emerald-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center gap-1 text-[10px]">
+        <i class="fa-solid fa-code-branch text-sm"></i>
+        <span>Branches</span>
+      </button>
+
+      <button @click="activeTab = 'analytics'" :class="activeTab === 'analytics' ? 'text-emerald-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center gap-1 text-[10px]">
+        <i class="fa-solid fa-chart-pie text-sm"></i>
+        <span>GSTR & P/L</span>
+      </button>
+
+      <button @click="activeTab = 'settings'" :class="activeTab === 'settings' ? 'text-emerald-400 font-bold' : 'text-slate-400'" class="flex flex-col items-center gap-1 text-[10px]">
+        <i class="fa-solid fa-gear text-sm"></i>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+    <!-- ============================================== -->
+    <!-- REAL MODAL DIALOGS (PRODUCT, STAFF, TRANSFER) -->
+    <!-- ============================================== -->
+
+    <!-- 1. Product Add/Edit Modal -->
+    <div v-if="productModal.show" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+      <div class="glass-card rounded-2xl max-w-md w-full p-5 space-y-3 border border-slate-700 shadow-2xl overflow-y-auto max-h-[90vh]">
+        <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+          <h3 class="font-bold text-sm text-white">{{ productModal.isEdit ? 'Edit Product' : 'Add New Product' }}</h3>
+          <button @click="productModal.show = false" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-slate-400">Product Name</label>
+            <input v-model="productModal.form.name" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-slate-400">Barcode</label>
+              <input v-model="productModal.form.barcode" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+            </div>
+            <div>
+              <label class="text-slate-400">Category</label>
+              <input v-model="productModal.form.category" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="text-slate-400">Cost (₹)</label>
+              <input v-model.number="productModal.form.costPrice" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+            </div>
+            <div>
+              <label class="text-slate-400">Selling (₹)</label>
+              <input v-model.number="productModal.form.sellingPrice" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+            </div>
+            <div>
+              <label class="text-slate-400">GST Slab (%)</label>
+              <select v-model.number="productModal.form.gstRate" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                <option :value="0">0%</option>
+                <option :value="5">5%</option>
+                <option :value="12">12%</option>
+                <option :value="18">18%</option>
+                <option :value="28">28%</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="text-slate-400">Stock Qty</label>
+              <input v-model.number="productModal.form.stock" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+            </div>
+            <div>
+              <label class="text-slate-400">Min Alert</label>
+              <input v-model.number="productModal.form.minStock" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+            </div>
+            <div>
+              <label class="text-slate-400">Unit</label>
+              <input v-model="productModal.form.unit" type="text" placeholder="Kg/Pcs" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-700">
+          <button @click="productModal.show = false" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs">Cancel</button>
+          <button @click="saveProduct" class="px-4 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold text-white">Save Product</button>
+        </div>
+      </div>
     </div>
+
+    <!-- 2. Wastage Write-Off Modal -->
+    <div v-if="wastageModal.show" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+      <div class="glass-card rounded-2xl max-w-sm w-full p-4 space-y-3 border border-slate-700 shadow-2xl">
+        <h3 class="font-bold text-sm text-amber-400">Damaged / Expired Write-Off</h3>
+        <p class="text-xs text-slate-300">Item: <strong>{{ wastageModal.item.name }}</strong> (Stock: {{ wastageModal.item.stock }})</p>
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-slate-400">Quantity to Deduct</label>
+            <input v-model.number="wastageModal.qty" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400">Reason</label>
+            <input v-model="wastageModal.reason" type="text" placeholder="Expired / Broken..." class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="wastageModal.show = false" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs">Cancel</button>
+          <button @click="executeWastageDeduction" class="px-4 py-1.5 rounded-lg bg-rose-600 text-xs font-bold text-white">Deduct Stock</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Stock Transfer Modal -->
+    <div v-if="transferModal.show" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+      <div class="glass-card rounded-2xl max-w-md w-full p-5 space-y-3 border border-slate-700 shadow-2xl">
+        <h3 class="font-bold text-sm text-white">New Inter-Branch Transfer Voucher</h3>
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-slate-400">Destination Branch</label>
+            <select v-model="transferModal.toBranchId" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+              <option v-for="b in branches.filter(b => b.id !== activeBranch.id)" :key="b.id" :value="b.id">{{ b.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-slate-400">Select Item</label>
+            <select v-model="transferModal.productId" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+              <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }} (Available: {{ p.stock }})</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-slate-400">Transfer Quantity</label>
+            <input v-model.number="transferModal.qty" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400">Audit Remarks / Note</label>
+            <input v-model="transferModal.note" type="text" placeholder="Shift transfer note..." class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-700">
+          <button @click="transferModal.show = false" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs">Cancel</button>
+          <button @click="executeStockTransfer" class="px-4 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold text-white">Execute Transfer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Staff Add Modal -->
+    <div v-if="staffModal.show" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+      <div class="glass-card rounded-2xl max-w-sm w-full p-4 space-y-3 border border-slate-700 shadow-2xl">
+        <h3 class="font-bold text-sm text-white">Register New Staff</h3>
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-slate-400">Full Name</label>
+            <input v-model="staffModal.name" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400">Employee Code</label>
+            <input v-model="staffModal.code" type="text" placeholder="e.g. ST-05" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400">Commission Rate (%)</label>
+            <input v-model.number="staffModal.commissionRate" type="number" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="staffModal.show = false" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs">Cancel</button>
+          <button @click="saveStaff" class="px-4 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold text-white">Register Staff</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Shift Handover Modal -->
+    <div v-if="shiftModal.show" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+      <div class="glass-card rounded-2xl max-w-sm w-full p-4 space-y-3 border border-slate-700 shadow-2xl">
+        <h3 class="font-bold text-sm text-white">Shift Manager & Cart Reset</h3>
+        <div class="space-y-2 text-xs">
+          <div>
+            <label class="text-slate-400">Current Cashier</label>
+            <input v-model="shiftModal.cashierName" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+          <div>
+            <label class="text-slate-400">Opening Drawer Cash (₹)</label>
+            <input v-model.number="shiftModal.openingCash" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="shiftModal.show = false" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs">Close</button>
+          <button @click="applyShiftUpdate" class="px-4 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold text-white">Update Shift</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- THERMAL RECEIPT SLIP -->
+    <div id="printable-receipt" class="hidden">
+      <div style="text-align: center; margin-bottom: 6px;">
+        <h2 style="margin: 0; font-size: 15px; font-weight: bold;">{{ activeBranch.name }}</h2>
+        <p style="margin: 2px 0; font-size: 10px;">{{ activeBranch.address }}</p>
+        <p style="margin: 2px 0; font-size: 10px;">Phone: {{ activeBranch.phone }}</p>
+        <p v-if="activeBranch.gstin" style="margin: 2px 0; font-size: 10px;">GSTIN: {{ activeBranch.gstin }}</p>
+      </div>
+      <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 4px 0; font-size: 10px; margin-bottom: 6px;">
+        <p style="margin: 0;">Bill No: #{{ lastInvoice.id }} | Date: {{ lastInvoice.date }}</p>
+        <p style="margin: 0;">Cashier: {{ lastInvoice.staffName }} | Mode: {{ lastInvoice.paymentMode }}</p>
+      </div>
+      <table style="width: 100%; font-size: 10px; margin-bottom: 6px; text-align: left;">
+        <thead>
+          <tr style="border-bottom: 1px solid #000;">
+            <th>Item</th>
+            <th style="text-align: center;">Qty</th>
+            <th style="text-align: right;">Amt</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="it in lastInvoice.items" :key="it.id">
+            <td>{{ it.name }}</td>
+            <td style="text-align: center;">{{ it.qty }}</td>
+            <td style="text-align: right;">{{ (it.sellingPrice * it.qty).toFixed(2) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="border-top: 1px dashed #000; padding-top: 4px; font-size: 10px; text-align: right;">
+        <p style="margin: 2px 0;">Taxable: ₹{{ (lastInvoice.taxable || 0).toFixed(2) }}</p>
+        <p style="margin: 2px 0;">GST Tax: ₹{{ (lastInvoice.tax || 0).toFixed(2) }}</p>
+        <h3 style="margin: 4px 0; font-size: 13px;">Total: ₹{{ (lastInvoice.grandTotal || 0).toFixed(2) }}</h3>
+      </div>
+      <div style="text-align: center; margin-top: 10px; font-size: 9px;">
+        <p style="margin: 0;">*** Thank you! Visit Again ***</p>
+      </div>
+    </div>
+
   </div>
 
-  <!-- ================= PIN GUARD MODAL ================= -->
-  <div v-if="pinPromptActive" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-72 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl flex flex-col items-center">
-      <h3 class="font-bold text-xs text-white mb-1">સિક્યોરિટી પિન દાખલ કરો</h3>
-      <div class="w-full bg-slate-950 rounded-xl py-2.5 border border-slate-800 flex justify-center text-xl font-mono text-emerald-400 mb-4 tracking-widest">
-        {{ enteredPin ? '•'.repeat(enteredPin.length) : '----' }}
-      </div>
-      <div class="grid grid-cols-3 gap-2 w-full">
-        <button v-for="n in [1,2,3,4,5,6,7,8,9]" :key="n" @click="appendPin(n)" class="h-11 bg-slate-800 text-white font-bold rounded-xl">{{ n }}</button>
-        <button @click="enteredPin = ''" class="h-11 bg-rose-500/20 text-rose-300 font-bold rounded-xl text-xs">C</button>
-        <button @click="appendPin(0)" class="h-11 bg-slate-800 text-white font-bold rounded-xl">0</button>
-        <button @click="submitPin" class="h-11 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs">OK</button>
-      </div>
-      <button @click="pinPromptActive = false; enteredPin = ''" class="mt-3 text-xs text-slate-500">રદ કરો</button>
-    </div>
-  </div>
+  <!-- COMPLETE VUE 3 APPLICATION CORE SCRIPT -->
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
 
-  <!-- ================= PRICE OVERRIDE MODAL ================= -->
-  <div v-if="activeModal === 'priceOverride'" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-72 bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3">
-      <h3 class="font-bold text-xs text-white">ભાવ બદલો: {{ priceOverrideForm.name }}</h3>
-      <input v-model.number="priceOverrideForm.newPrice" type="number" step="0.5" class="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500" placeholder="નવો ભાવ (₹)">
-      <div class="flex gap-2">
-        <button @click="savePriceOverride" class="flex-1 py-2 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs">સાચવો</button>
-        <button @click="activeModal = null" class="flex-1 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs">રદ કરો</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= ADD STOCK MODAL ================= -->
-  <div v-if="activeModal === 'addStock'" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-80 bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3">
-      <h3 class="font-bold text-xs text-white">નવી વસ્તુ ઉમેરો (Add Item)</h3>
-      <input v-model="newProductForm.code" type="text" placeholder="કોડ / બારકોડ" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
-      <input v-model="newProductForm.nameGu" type="text" placeholder="નામ (ગુજરાતી)" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
-      <input v-model="newProductForm.nameEn" type="text" placeholder="Name (English)" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
-      <div class="grid grid-cols-2 gap-2">
-        <input v-model.number="newProductForm.price" type="number" placeholder="ભાવ (₹)" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
-        <input v-model.number="newProductForm.stock" type="number" placeholder="શરૂઆતનો સ્ટોક" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
-      </div>
-      <select v-model="newProductForm.category" class="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-xl text-white">
-        <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
-      </select>
-      <div class="flex gap-2 pt-1">
-        <button @click="addNewProduct" class="flex-1 py-2 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs">ઉમેરો</button>
-        <button @click="activeModal = null" class="flex-1 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs">રદ કરો</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= SETTLE KHATA MODAL ================= -->
-  <div v-if="activeModal === 'settleKhata'" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-72 bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-3">
-      <h3 class="font-bold text-xs text-white">ખાતું સરભર કરો</h3>
-      <p class="text-xs text-slate-400">{{ settleKhataForm.name }} (બાકી: ₹{{ settleKhataForm.balance.toFixed(2) }})</p>
-      <input v-model.number="settleKhataForm.amount" type="number" placeholder="જમા રકમ (₹)" class="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500">
-      <div class="flex gap-2">
-        <button @click="executeSettleKhata" class="flex-1 py-2 bg-emerald-500 text-slate-950 font-black rounded-xl text-xs">જમા કરો</button>
-        <button @click="activeModal = null" class="flex-1 py-2 bg-slate-800 text-slate-400 rounded-xl text-xs">રદ કરો</button>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- ================= APPLICATION SCRIPT ================= -->
-<script>
-const { createApp, ref, computed, onMounted, nextTick } = Vue;
-
-// Dexie IndexedDB Initialization
-const db = new Dexie('SmartRetailPOS_DB');
-db.version(1).stores({
-  products: '++id, code, category, stock',
-  invoices: '++id, timestamp, total',
-  khata: 'phone, name, balance'
-});
-
-const defaultProducts = [
-  { code: '101', name: { gu: 'કપાસિયા તેલ (૧ લિટર)', hi: 'कपासिया तेल (1L)', en: 'Cottonseed Oil (1L)' }, price: 140.00, stock: 24, category: 'કરિયાણું', taxRate: 5 },
-  { code: '102', name: { gu: 'તુવેર દાળ (૧ કિલો)', hi: 'तुवर दाल (1kg)', en: 'Toor Dal (1kg)' }, price: 165.00, stock: 12, category: 'કરિયાણું', taxRate: 0 },
-  { code: '103', name: { gu: 'વાઘ બકરી ચા (૨૫૦ ગ્રા)', hi: 'वाघ बकरी चाय (250g)', en: 'Wagh Bakri Tea (250g)' }, price: 135.00, stock: 4, category: 'પીણાં', taxRate: 5 },
-  { code: '104', name: { gu: 'અમૂલ તાઝા દૂધ (૫૦૦ મિલી)', hi: 'अमुल ताजा दूध (500ml)', en: 'Amul Taaza Milk (500ml)' }, price: 27.00, stock: 40, category: 'ડેરી', taxRate: 0 },
-  { code: '105', name: { gu: 'દેશી ગોળ (૧ કિલો)', hi: 'देसी गुड़ (1kg)', en: 'Desi Jaggery (1kg)' }, price: 60.00, stock: 18, category: 'કરિયાણું', taxRate: 0 },
-  { code: '106', name: { gu: 'જીરું પાઉડર (૧૦૦ ગ્રા)', hi: 'जीरा पाउडर (100g)', en: 'Cumin Powder (100g)' }, price: 45.00, stock: 3, category: 'મસાલા', taxRate: 5 }
-];
-
-const dictionary = {
-  gu: {
-    search_placeholder: 'વસ્તુ અથવા બારકોડ શોધો...',
-    cat_all: 'બધું',
-    live_inventory: 'લાઈવ ઇન્વેન્ટરી અને સ્ટોક',
-    customer_khata: 'ગ્રાહક ખાતાવહી (ઉધારી)',
-    pay_cash: 'રોકડ',
-    pay_upi: 'UPI',
-    pay_card: 'કાર્ડ',
-    pay_khata: 'ઉધારી',
-    nav_pos: 'કાઉન્ટર',
-    nav_inventory: 'સ્ટોક',
-    nav_khata: 'ખાતાવહી',
-    nav_reports: 'હિસાબ'
-  },
-  hi: {
-    search_placeholder: 'सामान या बारकोड खोजें...',
-    cat_all: 'सभी',
-    live_inventory: 'लाइव इन्वेंटरी और स्टॉक',
-    customer_khata: 'ग्राहक खाता बही (उधार)',
-    pay_cash: 'नकद',
-    pay_upi: 'UPI',
-    pay_card: 'कार्ड',
-    pay_khata: 'उधार',
-    nav_pos: 'काउंटर',
-    nav_inventory: 'स्टॉक',
-    nav_khata: 'खाता',
-    nav_reports: 'रिपोर्ट'
-  },
-  en: {
-    search_placeholder: 'Search product or barcode...',
-    cat_all: 'All',
-    live_inventory: 'Live Inventory & Stock',
-    customer_khata: 'Customer Ledger (Khata)',
-    pay_cash: 'Cash',
-    pay_upi: 'UPI',
-    pay_card: 'Card',
-    pay_khata: 'Credit',
-    nav_pos: 'Counter',
-    nav_inventory: 'Stock',
-    nav_khata: 'Khata',
-    nav_reports: 'Reports'
-  }
-};
-
-createApp({
-  setup() {
-    const config = ref({
-      storeName: 'શ્રી ગણેશ સુપર સ્ટોર',
-      gstin: '24AAAAA0000A1Z5',
-      upiId: 'ganeshretail@okaxis',
-      pin: '1234'
+    // 1. Setup Persistent IndexedDB using Dexie
+    const db = new Dexie('ApexEnterprisePOS_DB');
+    db.version(1).stores({
+      products: '++id, barcode, category, name',
+      sales: 'id, branchId, staffId, date',
+      staff: '++id, code',
+      branches: '++id',
+      transfers: '++id, timestamp',
+      shifts: '++id',
+      settings: 'key'
     });
 
-    const lang = ref('gu');
-    const isShiftOpen = ref(true);
-    const cameraActive = ref(false);
-    const printerConnected = ref(false);
-    const bannerNotice = ref(null);
-    const cameraVideoRef = ref(null);
-    let cameraMediaStream = null;
+    createApp({
+      setup() {
+        // App State
+        const activeTab = ref('pos');
+        const searchQuery = ref('');
+        const selectedCategory = ref('ALL');
+        const isGstBill = ref(true);
+        const paymentMode = ref('CASH');
+        const customerPhone = ref('');
+        const customerName = ref('');
+        const selectedStaffId = ref(1);
 
-    const activeTab = ref('pos');
-    const navigationTabs = [
-      { id: 'pos', icon: '🏪', key: 'nav_pos' },
-      { id: 'inventory', icon: '📦', key: 'nav_inventory' },
-      { id: 'khata', icon: '📒', key: 'nav_khata' },
-      { id: 'reports', icon: '📊', key: 'nav_reports' }
-    ];
+        // Hardware & Speech States
+        const isListening = ref(false);
+        const showScannerModal = ref(false);
+        let html5QrCodeScanner = null;
 
-    const productFilter = ref('');
-    const selectedCategory = ref('all');
-    const categories = ref(['કરિયાણું', 'ડેરી', 'પીણાં', 'મસાલા']);
-    const inventoryList = ref([]);
-    const khataLedgerList = ref([]);
-    const recentInvoices = ref([]);
+        // Reactive Database Collections
+        const products = ref([]);
+        const salesHistory = ref([]);
+        const staffList = ref([]);
+        const branches = ref([
+          { id: 1, name: 'Apex Central Store', address: 'Main Ring Road, Surat', gstin: '24AAACC1206M1ZV', phone: '9876543210', upiId: 'apexcentral@upi' },
+          { id: 2, name: 'Apex Express Branch', address: 'Station Road, Vadodara', gstin: '24AAACC1206M2ZW', phone: '9876543211', upiId: 'apexexpress@upi' }
+        ]);
+        const activeBranch = ref(branches.value[0]);
+        const transferLogs = ref([]);
+        const cart = ref([]);
+        const lastInvoice = ref({});
 
-    const activeCart = ref([]);
-    const cartDrawerOpen = ref(false);
-    const activePayMode = ref('cash');
-    const khataCustomerPhone = ref('');
-    const khataCustomerName = ref('');
+        // Current Shift & PIN
+        const currentShift = ref({ cashierName: 'Senior Cashier', openingCash: 2000 });
+        const adminPin = ref('1234');
+        const pinForm = ref({ oldPin: '', newPin: '' });
 
-    const pinPromptActive = ref(false);
-    const enteredPin = ref('');
-    let guardedActionCallback = null;
-
-    const activeModal = ref(null);
-    const priceOverrideForm = ref({ index: -1, name: '', newPrice: 0 });
-    const newProductForm = ref({ code: '', nameGu: '', nameEn: '', price: null, stock: 10, category: 'કરિયાણું' });
-    const settleKhataForm = ref({ phone: '', name: '', balance: 0, amount: null });
-
-    const t = (key) => dictionary[lang.value]?.[key] || key;
-    const setLang = (l) => { lang.value = l; };
-
-    const loadDatabase = async () => {
-      const count = await db.products.count();
-      if (count === 0) {
-        await db.products.bulkAdd(defaultProducts);
-      }
-      inventoryList.value = await db.products.toArray();
-      khataLedgerList.value = await db.khata.toArray();
-      recentInvoices.value = (await db.invoices.reverse().limit(20).toArray());
-    };
-
-    const visibleProducts = computed(() => {
-      return inventoryList.value.filter(p => {
-        const matchesCategory = selectedCategory.value === 'all' || p.category === selectedCategory.value;
-        const q = productFilter.value.trim().toLowerCase();
-        const matchesFilter = !q || 
-          p.code.toLowerCase().includes(q) || 
-          (p.name.gu && p.name.gu.toLowerCase().includes(q)) || 
-          (p.name.en && p.name.en.toLowerCase().includes(q)) ||
-          (p.name.hi && p.name.hi.toLowerCase().includes(q));
-        return matchesCategory && matchesFilter;
-      });
-    });
-
-    const netPayableTotal = computed(() => {
-      return activeCart.value.reduce((sum, item) => {
-        return sum + (item.price * item.qty * (1 + (item.taxRate || 0) / 100));
-      }, 0);
-    });
-
-    const lifetimeMetrics = computed(() => {
-      const totalSales = recentInvoices.value.reduce((acc, inv) => acc + inv.total, 0);
-      return { totalSales, invoicesCount: recentInvoices.value.length };
-    });
-
-    const addItemToCart = (product) => {
-      if (product.stock <= 0) {
-        bannerNotice.value = `${product.name[lang.value]} સ્ટોકમાં નથી!`;
-        return;
-      }
-      const existing = activeCart.value.find(item => item.id === product.id);
-      if (existing) {
-        if (existing.qty < product.stock) {
-          existing.qty += 1;
-        } else {
-          bannerNotice.value = `સ્ટોક મર્યાદા પહોંચી ગઈ છે (${product.stock})`;
-        }
-      } else {
-        activeCart.value.push({
-          id: product.id,
-          code: product.code,
-          name: { ...product.name },
-          price: product.price,
-          qty: 1,
-          taxRate: product.taxRate || 0
+        // Zero-Bloat Feature Toggles
+        const settings = ref({
+          gstEngine: true,
+          staffTracking: true,
+          multiBranch: true,
+          voiceSearch: true,
+          cameraScanner: true,
+          negativeStockRestrict: true
         });
-      }
-    };
 
-    const updateLineQty = (idx, delta) => {
-      const item = activeCart.value[idx];
-      const prod = inventoryList.value.find(p => p.id === item.id);
-      const newQty = item.qty + delta;
-      if (newQty <= 0) {
-        activeCart.value.splice(idx, 1);
-      } else if (prod && newQty > prod.stock) {
-        bannerNotice.value = `મહત્તમ ઉપલબ્ધ સ્ટોક: ${prod.stock}`;
-      } else {
-        item.qty = newQty;
-      }
-    };
+        // Zero-Popup UI Notifications & Dialogs
+        const toasts = ref([]);
+        const triggerToast = (message, type = 'success') => {
+          const id = Date.now();
+          toasts.value.push({ id, message, type });
+          setTimeout(() => { toasts.value = toasts.value.filter(t => t.id !== id); }, 3000);
+        };
 
-    const clearActiveCart = () => {
-      activeCart.value = [];
-    };
+        const confirmDialog = ref({ show: false, title: '', message: '', action: null });
+        const executeConfirmAction = () => {
+          if (confirmDialog.value.action) confirmDialog.value.action();
+          confirmDialog.value.show = false;
+        };
 
-    const openPriceOverrideModal = (idx) => {
-      const item = activeCart.value[idx];
-      priceOverrideForm.value = {
-        index: idx,
-        name: item.name[lang.value],
-        newPrice: item.price
-      };
-      triggerGuardedAction(() => {
-        activeModal.value = 'priceOverride';
-      });
-    };
+        // Modal States
+        const productModal = ref({
+          show: false,
+          isEdit: false,
+          form: { id: null, name: '', barcode: '', category: '', costPrice: 0, sellingPrice: 0, gstRate: 5, stock: 10, minStock: 3, unit: 'Pcs' }
+        });
 
-    const savePriceOverride = () => {
-      const idx = priceOverrideForm.value.index;
-      if (idx >= 0 && activeCart.value[idx]) {
-        activeCart.value[idx].price = Number(priceOverrideForm.value.newPrice) || 0;
-      }
-      activeModal.value = null;
-      renderUpiQr();
-    };
+        const wastageModal = ref({ show: false, item: {}, qty: 1, reason: '' });
+        const transferModal = ref({ show: false, toBranchId: 2, productId: null, qty: 1, note: '' });
+        const staffModal = ref({ show: false, name: '', code: '', commissionRate: 2.5 });
+        const shiftModal = ref({ show: false, cashierName: '', openingCash: 0 });
 
-    const setPaymentMode = (mode) => {
-      activePayMode.value = mode;
-      if (mode === 'upi') {
-        renderUpiQr();
-      }
-    };
+        // Initial Seed Loader
+        onMounted(async () => {
+          // Register In-Line ServiceWorker for Offline PWA Installation
+          if ('serviceWorker' in navigator) {
+            const swCode = `self.addEventListener('install', e => self.skipWaiting()); self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));`;
+            const blob = new Blob([swCode], { type: 'application/javascript' });
+            navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+          }
 
-    const renderUpiQr = () => {
-      nextTick(() => {
-        const canvas = document.getElementById('upiQrMiniCanvas');
-        if (canvas && typeof QRCode !== 'undefined') {
-          const upiUri = `upi://pay?pa=${config.value.upiId}&pn=${encodeURIComponent(config.value.storeName)}&am=${netPayableTotal.value.toFixed(2)}&cu=INR`;
-          QRCode.toCanvas(canvas, upiUri, { width: 56, margin: 1 }, () => {});
-        }
-      });
-    };
+          // Load IndexedDB items
+          const dbProducts = await db.products.toArray();
+          if (dbProducts.length === 0) {
+            const seedProducts = [
+              { name: 'Cottonseed Oil 1L Pouch', barcode: '890123', category: 'Oils & Ghee', costPrice: 110, sellingPrice: 140, gstRate: 5, stock: 48, minStock: 10, unit: 'Ltr' },
+              { name: 'Toor Dal Premium 1kg', barcode: '890124', category: 'Grocery', costPrice: 130, sellingPrice: 165, gstRate: 0, stock: 35, minStock: 5, unit: 'Kg' },
+              { name: 'Wagh Bakri Tea 250g', barcode: '890125', category: 'Beverages', costPrice: 110, sellingPrice: 135, gstRate: 5, stock: 22, minStock: 5, unit: 'Pkt' },
+              { name: 'Amul Taaza Milk 500ml', barcode: '890126', category: 'Dairy', costPrice: 24, sellingPrice: 27, gstRate: 0, stock: 60, minStock: 12, unit: 'Pouch' },
+              { name: 'Surf Excel Quick Wash 1kg', barcode: '890127', category: 'Cleaning', costPrice: 135, sellingPrice: 160, gstRate: 18, stock: 25, minStock: 6, unit: 'Pkt' }
+            ];
+            await db.products.bulkAdd(seedProducts);
+            products.value = await db.products.toArray();
+          } else {
+            products.value = dbProducts;
+          }
 
-    const triggerGuardedAction = (action) => {
-      guardedActionCallback = action;
-      enteredPin.value = '';
-      pinPromptActive.value = true;
-    };
+          const dbStaff = await db.staff.toArray();
+          if (dbStaff.length === 0) {
+            await db.staff.bulkAdd([
+              { name: 'Rahul Sharma', code: 'ST-01', role: 'Senior Cashier', commissionRate: 2.5 },
+              { name: 'Priya Patel', code: 'ST-02', role: 'Sales Exec', commissionRate: 3.0 }
+            ]);
+            staffList.value = await db.staff.toArray();
+          } else {
+            staffList.value = dbStaff;
+          }
 
-    const appendPin = (n) => {
-      if (enteredPin.value.length < 4) {
-        enteredPin.value += n;
-      }
-    };
+          salesHistory.value = await db.sales.reverse().toArray();
+          transferLogs.value = await db.transfers.reverse().toArray();
+        });
 
-    const submitPin = () => {
-      if (enteredPin.value === config.value.pin) {
-        pinPromptActive.value = false;
-        if (guardedActionCallback) guardedActionCallback();
-        guardedActionCallback = null;
-      } else {
-        bannerNotice.value = 'ખોટો પિન! ફરી પ્રયત્ન કરો.';
-        enteredPin.value = '';
-      }
-    };
+        // Categories List
+        const categories = computed(() => {
+          const set = new Set(products.value.map(p => p.category));
+          return Array.from(set);
+        });
 
-    const toggleShiftStatus = () => {
-      isShiftOpen.value = !isShiftOpen.value;
-      bannerNotice.value = isShiftOpen.value ? 'નવી શિફ્ટ શરૂ કરવામાં આવી છે.' : 'શિફ્ટ બંધ કરવામાં આવી છે.';
-    };
-
-    const replenishStock = async (itemId, count) => {
-      const prod = inventoryList.value.find(p => p.id === itemId);
-      if (prod) {
-        prod.stock += count;
-        await db.products.update(itemId, { stock: prod.stock });
-        bannerNotice.value = `${prod.name[lang.value]} સ્ટોક અપડેટ થયો (+${count})`;
-      }
-    };
-
-    const openAddStockModal = () => {
-      newProductForm.value = { code: '', nameGu: '', nameEn: '', price: null, stock: 10, category: categories.value[0] };
-      activeModal.value = 'addStock';
-    };
-
-    const addNewProduct = async () => {
-      const form = newProductForm.value;
-      if (!form.code || !form.nameGu || !form.price) {
-        bannerNotice.value = 'કૃપા કરીને બધી વિગતો ભરો.';
-        return;
-      }
-      const item = {
-        code: form.code,
-        name: {
-          gu: form.nameGu,
-          hi: form.nameGu,
-          en: form.nameEn || form.nameGu
-        },
-        price: Number(form.price),
-        stock: Number(form.stock) || 0,
-        category: form.category,
-        taxRate: 5
-      };
-      const id = await db.products.add(item);
-      item.id = id;
-      inventoryList.value.push(item);
-      activeModal.value = null;
-      bannerNotice.value = 'નવી વસ્તુ ઉમેરવામાં આવી!';
-    };
-
-    const openSettleKhataModal = (customer) => {
-      settleKhataForm.value = {
-        phone: customer.phone,
-        name: customer.name,
-        balance: customer.balance,
-        amount: customer.balance
-      };
-      activeModal.value = 'settleKhata';
-    };
-
-    const executeSettleKhata = async () => {
-      const { phone, balance, amount } = settleKhataForm.value;
-      const amt = Number(amount) || 0;
-      if (amt <= 0) return;
-      const newBal = Math.max(0, balance - amt);
-      if (newBal === 0) {
-        await db.khata.delete(phone);
-      } else {
-        await db.khata.update(phone, { balance: newBal });
-      }
-      khataLedgerList.value = await db.khata.toArray();
-      activeModal.value = null;
-      bannerNotice.value = `₹${amt.toFixed(2)} જમા કરવામાં આવ્યા.`;
-    };
-
-    const connectPrinter = async () => {
-      try {
-        if (navigator.bluetooth) {
-          bannerNotice.value = 'બ્લૂટૂથ પ્રિન્ટર શોધી રહ્યું છે...';
-          const device = await navigator.bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+        // Search and Filtered Products
+        const filteredProducts = computed(() => {
+          return products.value.filter(p => {
+            const matchesCat = selectedCategory.value === 'ALL' || p.category === selectedCategory.value;
+            const matchesSearch = p.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || 
+                                  p.barcode.includes(searchQuery.value);
+            return matchesCat && matchesSearch;
           });
-          printerConnected.value = !!device;
-          bannerNotice.value = `પ્રિન્ટર કનેક્ટ થયું: ${device.name || 'BT Printer'}`;
-        } else {
-          printerConnected.value = !printerConnected.value;
-          bannerNotice.value = printerConnected.value ? 'ડેમો પ્રિન્ટર કનેક્ટ થયું!' : 'પ્રિન્ટર ડિસ્કનેક્ટ થયું.';
-        }
-      } catch (err) {
-        printerConnected.value = false;
-        bannerNotice.value = 'બ્લૂટૂથ જોડાણ રદ કર્યું અથવા સમર્થિત નથી.';
-      }
-    };
-
-    const toggleCameraScanner = async () => {
-      if (cameraActive.value) {
-        if (cameraMediaStream) {
-          cameraMediaStream.getTracks().forEach(t => t.stop());
-        }
-        cameraActive.value = false;
-        return;
-      }
-      try {
-        cameraMediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        cameraActive.value = true;
-        await nextTick();
-        if (cameraVideoRef.value) {
-          cameraVideoRef.value.srcObject = cameraMediaStream;
-        }
-        bannerNotice.value = 'કેમેરા શરૂ થયો. કોડ સ્કેન કરો.';
-      } catch (e) {
-        bannerNotice.value = 'કેમેરાની પરવાનગી મળી નથી.';
-        cameraActive.value = false;
-      }
-    };
-
-    const executeCheckout = async () => {
-      if (!isShiftOpen.value) {
-        bannerNotice.value = 'શિફ્ટ બંધ છે. પહેલાં શિફ્ટ ખોલો!';
-        return;
-      }
-      if (!activeCart.value.length) {
-        bannerNotice.value = 'કાર્ટ ખાલી છે!';
-        return;
-      }
-
-      if (activePayMode.value === 'khata') {
-        if (!khataCustomerPhone.value) {
-          bannerNotice.value = 'ગ્રાહકનો ફોન નંબર જરૂરી છે!';
-          return;
-        }
-        const existing = await db.khata.get(khataCustomerPhone.value);
-        const newBal = (existing ? existing.balance : 0) + netPayableTotal.value;
-        await db.khata.put({
-          phone: khataCustomerPhone.value,
-          name: khataCustomerName.value || 'અનામી ગ્રાહક',
-          balance: newBal
         });
-        khataLedgerList.value = await db.khata.toArray();
-      }
 
-      for (const line of activeCart.value) {
-        const prod = inventoryList.value.find(p => p.id === line.id);
-        if (prod) {
-          prod.stock = Math.max(0, prod.stock - line.qty);
+        // Cart Arithmetic (Base, GST, Net Total)
+        const cartTotals = computed(() => {
+          let taxable = 0;
+          let tax = 0;
+
+          cart.value.forEach(item => {
+            const itemTotal = item.sellingPrice * item.qty;
+            if (isGstBill.value && item.gstRate > 0) {
+              const basePrice = itemTotal / (1 + (item.gstRate / 100));
+              taxable += basePrice;
+              tax += (itemTotal - basePrice);
+            } else {
+              taxable += itemTotal;
+            }
+          });
+
+          return {
+            taxable,
+            tax,
+            grandTotal: taxable + tax
+          };
+        });
+
+        // Cart Actions
+        const addToCart = (product) => {
+          if (settings.value.negativeStockRestrict && product.stock <= 0) {
+            triggerToast('Item out of stock! Negative billing locked.', 'error');
+            return;
+          }
+          const existing = cart.value.find(c => c.id === product.id);
+          if (existing) {
+            existing.qty += 1;
+          } else {
+            cart.value.push({ ...product, qty: 1 });
+          }
+        };
+
+        const updateCartQty = (index, delta) => {
+          cart.value[index].qty += delta;
+          if (cart.value[index].qty <= 0) {
+            cart.value.splice(index, 1);
+          }
+        };
+
+        const resetCart = () => {
+          cart.value = [];
+          customerPhone.value = '';
+          customerName.value = '';
+          triggerToast('Cart cleared.');
+        };
+
+        const handleBarcodeDirectEnter = () => {
+          const query = searchQuery.value.trim();
+          const match = products.value.find(p => p.barcode === query);
+          if (match) {
+            addToCart(match);
+            searchQuery.value = '';
+            triggerToast(`Added ${match.name} to cart.`);
+          }
+        };
+
+        // Complete Sale Engine: Zero Dummy Functions
+        const completeSale = async (shouldPrint = false, dispatchMode = 'SAVE') => {
+          if (cart.value.length === 0) return;
+
+          const staffObj = staffList.value.find(s => s.id === selectedStaffId.value) || { name: 'Cashier' };
+          const invoice = {
+            id: 'INV' + Math.floor(100000 + Math.random() * 900000),
+            date: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            branchId: activeBranch.value.id,
+            staffId: selectedStaffId.value,
+            staffName: staffObj.name,
+            items: JSON.parse(JSON.stringify(cart.value)),
+            taxable: cartTotals.value.taxable,
+            tax: cartTotals.value.tax,
+            grandTotal: cartTotals.value.grandTotal,
+            paymentMode: paymentMode.value,
+            customerPhone: customerPhone.value,
+            customerName: customerName.value
+          };
+
+          // Deduct from IndexedDB
+          for (let ci of cart.value) {
+            const p = products.value.find(prod => prod.id === ci.id);
+            if (p) {
+              p.stock -= ci.qty;
+              await db.products.update(p.id, { stock: p.stock });
+            }
+          }
+
+          // Save Sale Record
+          await db.sales.add(invoice);
+          salesHistory.value.unshift(invoice);
+          lastInvoice.value = invoice;
+
+          if (dispatchMode === 'WHATSAPP') {
+            const phone = customerPhone.value.trim() || '919876543210';
+            const msg = encodeURIComponent(`*${activeBranch.value.name} Bill Summary*\nInvoice: #${invoice.id}\nAmount: Rs.${invoice.grandTotal.toFixed(2)}\nPayment: ${invoice.paymentMode}\nThank you!`);
+            window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${msg}`, '_blank');
+          }
+
+          if (shouldPrint) {
+            setTimeout(() => { window.print(); }, 250);
+          }
+
+          triggerToast(`Invoice #${invoice.id} saved & processed!`);
+          resetCart();
+        };
+
+        // Real Camera Barcode Engine via Html5Qrcode
+        const toggleCameraScanner = () => {
+          showScannerModal.value = !showScannerModal.value;
+          if (showScannerModal.value) {
+            setTimeout(() => {
+              html5QrCodeScanner = new Html5Qrcode("barcode-reader-box");
+              html5QrCodeScanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 150 } },
+                (decodedText) => {
+                  searchQuery.value = decodedText;
+                  handleBarcodeDirectEnter();
+                  stopCameraScanner();
+                },
+                () => {}
+              ).catch(() => {
+                triggerToast('Camera access denied or unavailable.', 'error');
+                showScannerModal.value = false;
+              });
+            }, 300);
+          } else {
+            stopCameraScanner();
+          }
+        };
+
+        const stopCameraScanner = () => {
+          if (html5QrCodeScanner) {
+            html5QrCodeScanner.stop().then(() => {
+              html5QrCodeScanner.clear();
+              html5QrCodeScanner = null;
+              showScannerModal.value = false;
+            }).catch(() => { showScannerModal.value = false; });
+          } else {
+            showScannerModal.value = false;
+          }
+        };
+
+        // Voice Search Recognition
+        const startVoiceSearch = () => {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!SpeechRecognition) {
+            triggerToast('Voice search not supported in this browser.', 'warn');
+            return;
+          }
+          const recognition = new SpeechRecognition();
+          recognition.lang = 'en-IN';
+          isListening.value = true;
+          recognition.onresult = (e) => {
+            searchQuery.value = e.results[0][0].transcript;
+            isListening.value = false;
+            triggerToast(`Searching: "${searchQuery.value}"`);
+          };
+          recognition.onerror = () => { isListening.value = false; };
+          recognition.onend = () => { isListening.value = false; };
+          recognition.start();
+        };
+
+        // Product CRUD Operations
+        const openProductModal = (product = null) => {
+          if (product) {
+            productModal.value = { isEdit: true, show: true, form: JSON.parse(JSON.stringify(product)) };
+          } else {
+            productModal.value = {
+              isEdit: false,
+              show: true,
+              form: { id: null, name: '', barcode: String(Math.floor(100000 + Math.random() * 900000)), category: 'General', costPrice: 0, sellingPrice: 0, gstRate: 5, stock: 10, minStock: 2, unit: 'Pcs' }
+            };
+          }
+        };
+
+        const saveProduct = async () => {
+          const f = productModal.value.form;
+          if (!f.name || !f.barcode) {
+            triggerToast('Name and Barcode are required!', 'warn');
+            return;
+          }
+
+          if (productModal.value.isEdit) {
+            await db.products.update(f.id, f);
+            const idx = products.value.findIndex(p => p.id === f.id);
+            if (idx !== -1) products.value[idx] = { ...f };
+            triggerToast('Product details updated.');
+          } else {
+            const newId = await db.products.add(f);
+            products.value.push({ ...f, id: newId });
+            triggerToast('New product added to catalog.');
+          }
+          productModal.value.show = false;
+        };
+
+        const confirmDeleteProduct = (id) => {
+          confirmDialog.value = {
+            show: true,
+            title: 'Delete Product?',
+            message: 'Are you sure you want to delete this product from the database permanently?',
+            action: async () => {
+              await db.products.delete(id);
+              products.value = products.value.filter(p => p.id !== id);
+              triggerToast('Product deleted.');
+            }
+          };
+        };
+
+        // Stock Wastage Deductions
+        const openWastageModal = (item) => {
+          wastageModal.value = { show: true, item, qty: 1, reason: 'Damaged' };
+        };
+
+        const executeWastageDeduction = async () => {
+          const { item, qty, reason } = wastageModal.value;
+          if (qty <= 0 || qty > item.stock) {
+            triggerToast('Invalid wastage quantity!', 'warn');
+            return;
+          }
+          item.stock -= qty;
+          await db.products.update(item.id, { stock: item.stock });
+          wastageModal.value.show = false;
+          triggerToast(`Deducted ${qty} units as wastage (${reason}).`);
+        };
+
+        // Staff CRUD & Real Sales Tracking
+        const openStaffModal = () => {
+          staffModal.value = { show: true, name: '', code: 'ST-0' + (staffList.value.length + 1), commissionRate: 2.5 };
+        };
+
+        const saveStaff = async () => {
+          if (!staffModal.value.name) return;
+          const newStaff = { name: staffModal.value.name, code: staffModal.value.code, role: 'Cashier', commissionRate: staffModal.value.commissionRate };
+          const id = await db.staff.add(newStaff);
+          staffList.value.push({ ...newStaff, id });
+          staffModal.value.show = false;
+          triggerToast('New staff registered.');
+        };
+
+        const confirmDeleteStaff = (id) => {
+          confirmDialog.value = {
+            show: true,
+            title: 'Remove Staff?',
+            message: 'Are you sure you want to delete this staff member record?',
+            action: async () => {
+              await db.staff.delete(id);
+              staffList.value = staffList.value.filter(s => s.id !== id);
+              triggerToast('Staff removed.');
+            }
+          };
+        };
+
+        const getStaffStats = (staffId) => {
+          const sales = salesHistory.value.filter(s => s.staffId === staffId);
+          const total = sales.reduce((acc, curr) => acc + curr.grandTotal, 0);
+          const staffObj = staffList.value.find(s => s.id === staffId);
+          const rate = staffObj ? staffObj.commissionRate : 0;
+          return { totalSales: total, incentive: (total * rate) / 100 };
+        };
+
+        const sendStaffReportWhatsapp = (st) => {
+          const stats = getStaffStats(st.id);
+          const text = encodeURIComponent(`*Staff Performance Report*\nStaff: ${st.name} (${st.code})\nTotal Sales: Rs.${stats.totalSales.toFixed(2)}\nCommission Earned: Rs.${stats.incentive.toFixed(2)}`);
+          window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+        };
+
+        // Multi-Branch Transfers
+        const switchBranch = (b) => {
+          activeBranch.value = b;
+          triggerToast(`Switched active branch to ${b.name}`);
+        };
+
+        const openTransferModal = () => {
+          const target = branches.value.find(b => b.id !== activeBranch.value.id);
+          transferModal.value = { show: true, toBranchId: target ? target.id : 2, productId: products.value[0]?.id, qty: 1, note: '' };
+        };
+
+        const executeStockTransfer = async () => {
+          const { toBranchId, productId, qty, note } = transferModal.value;
+          const prod = products.value.find(p => p.id === productId);
+          const targetBranch = branches.value.find(b => b.id === toBranchId);
+
+          if (!prod || qty <= 0 || qty > prod.stock) {
+            triggerToast('Invalid transfer quantity or item!', 'warn');
+            return;
+          }
+
+          prod.stock -= qty;
           await db.products.update(prod.id, { stock: prod.stock });
-        }
+
+          const voucher = {
+            timestamp: new Date().toLocaleDateString('en-GB') + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            fromBranch: activeBranch.value.name,
+            toBranch: targetBranch.name,
+            itemName: prod.name,
+            qty,
+            note: note || 'Routine transfer'
+          };
+
+          const id = await db.transfers.add(voucher);
+          transferLogs.value.unshift({ ...voucher, id });
+          transferModal.value.show = false;
+          triggerToast(`Transferred ${qty} units of ${prod.name} successfully.`);
+        };
+
+        // Shift Handover
+        const openShiftModal = () => {
+          shiftModal.value = { show: true, cashierName: currentShift.value.cashierName, openingCash: currentShift.value.openingCash };
+        };
+
+        const applyShiftUpdate = () => {
+          currentShift.value.cashierName = shiftModal.value.cashierName;
+          currentShift.value.openingCash = shiftModal.value.openingCash;
+          shiftModal.value.show = false;
+          triggerToast('Shift details updated.');
+        };
+
+        // Excel Export/Import via SheetJS
+        const exportExcel = () => {
+          const ws = XLSX.utils.json_to_sheet(products.value);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Inventory");
+          XLSX.writeFile(wb, "Apex_Inventory_Export.xlsx");
+          triggerToast('Inventory exported as Excel file.');
+        };
+
+        const importExcel = (event) => {
+          const file = event.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet);
+            if (json.length > 0) {
+              await db.products.clear();
+              await db.products.bulkAdd(json);
+              products.value = await db.products.toArray();
+              triggerToast(`${json.length} items imported to database!`);
+            }
+          };
+          reader.readAsArrayBuffer(file);
+        };
+
+        // GSTR-1 & Analytics
+        const salesMetrics = computed(() => {
+          let turnover = 0;
+          let cost = 0;
+          let gst = 0;
+
+          salesHistory.value.forEach(inv => {
+            turnover += inv.grandTotal;
+            gst += inv.tax;
+            inv.items.forEach(it => { cost += (it.costPrice || 0) * it.qty; });
+          });
+
+          return { totalTurnover: turnover, gstCollected: gst, netProfit: turnover - cost - gst };
+        });
+
+        const getGstSlabTotal = (slab) => {
+          let taxable = 0;
+          let tax = 0;
+          salesHistory.value.forEach(inv => {
+            inv.items.forEach(it => {
+              if (it.gstRate === slab) {
+                const total = it.sellingPrice * it.qty;
+                const base = slab > 0 ? total / (1 + (slab / 100)) : total;
+                taxable += base;
+                tax += (total - base);
+              }
+            });
+          });
+          return { taxable, tax };
+        };
+
+        const exportGstReport = () => {
+          const report = {
+            gstin: activeBranch.value.gstin,
+            branch: activeBranch.value.name,
+            totalTurnover: salesMetrics.value.totalTurnover,
+            gstTaxLiability: salesMetrics.value.gstCollected,
+            slabs: [0, 5, 12, 18, 28].map(s => ({ slab: s, ...getGstSlabTotal(s) }))
+          };
+          const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = `GSTR1_${activeBranch.value.name.replace(/\s+/g, '_')}.json`;
+          link.click();
+          triggerToast('GSTR compliance report generated.');
+        };
+
+        // Security & Settings
+        const updateAdminPin = () => {
+          if (pinForm.value.oldPin !== adminPin.value) {
+            triggerToast('Current PIN is incorrect!', 'error');
+            return;
+          }
+          if (pinForm.value.newPin.length < 4) {
+            triggerToast('PIN must be at least 4 digits!', 'warn');
+            return;
+          }
+          adminPin.value = pinForm.value.newPin;
+          pinForm.value = { oldPin: '', newPin: '' };
+          triggerToast('Admin PIN updated securely.');
+        };
+
+        const formatSettingName = (str) => str.replace(/([A-Z])/g, ' $1');
+        const saveSettings = () => triggerToast('Configuration settings updated.');
+
+        const triggerFactoryResetConfirm = () => {
+          confirmDialog.value = {
+            show: true,
+            title: 'Factory Reset All Data?',
+            message: 'This will purge all offline database tables and reset the POS to default settings.',
+            action: async () => {
+              await db.delete();
+              location.reload();
+            }
+          };
+        };
+
+        return {
+          activeTab, searchQuery, selectedCategory, isGstBill, paymentMode,
+          customerPhone, customerName, selectedStaffId, isListening, showScannerModal,
+          products, salesHistory, staffList, branches, activeBranch, transferLogs,
+          cart, lastInvoice, currentShift, pinForm, settings, toasts, confirmDialog,
+          productModal, wastageModal, transferModal, staffModal, shiftModal,
+          categories, filteredProducts, cartTotals,
+          triggerToast, executeConfirmAction, addToCart, updateCartQty, resetCart,
+          handleBarcodeDirectEnter, completeSale, toggleCameraScanner, stopCameraScanner,
+          startVoiceSearch, openProductModal, saveProduct, confirmDeleteProduct,
+          openWastageModal, executeWastageDeduction, openStaffModal, saveStaff,
+          confirmDeleteStaff, getStaffStats, sendStaffReportWhatsapp, switchBranch,
+          openTransferModal, executeStockTransfer, openShiftModal, applyShiftUpdate,
+          exportExcel, importExcel, salesMetrics, getGstSlabTotal, exportGstReport,
+          updateAdminPin, formatSettingName, saveSettings, triggerFactoryResetConfirm
+        };
       }
-
-      const inv = {
-        timestamp: new Date().toISOString(),
-        total: netPayableTotal.value,
-        items: [...activeCart.value],
-        mode: activePayMode.value
-      };
-      const invId = await db.invoices.add(inv);
-      inv.id = invId;
-      recentInvoices.value.unshift(inv);
-
-      bannerNotice.value = `બિલ #${invId} તૈયાર! ₹${netPayableTotal.value.toFixed(2)} ચૂકવાયા.`;
-      activeCart.value = [];
-      cartDrawerOpen.value = false;
-      khataCustomerPhone.value = '';
-      khataCustomerName.value = '';
-    };
-
-    onMounted(() => {
-      loadDatabase();
-    });
-
-    return {
-      config,
-      lang,
-      setLang,
-      t,
-      isShiftOpen,
-      cameraActive,
-      printerConnected,
-      bannerNotice,
-      cameraVideoRef,
-      toggleCameraScanner,
-      connectPrinter,
-      activeTab,
-      navigationTabs,
-      productFilter,
-      selectedCategory,
-      categories,
-      inventoryList,
-      visibleProducts,
-      addItemToCart,
-      updateLineQty,
-      clearActiveCart,
-      activeCart,
-      cartDrawerOpen,
-      netPayableTotal,
-      activePayMode,
-      setPaymentMode,
-      khataCustomerPhone,
-      khataCustomerName,
-      executeCheckout,
-      pinPromptActive,
-      enteredPin,
-      appendPin,
-      submitPin,
-      triggerGuardedAction,
-      activeModal,
-      priceOverrideForm,
-      openPriceOverrideModal,
-      savePriceOverride,
-      newProductForm,
-      openAddStockModal,
-      addNewProduct,
-      replenishStock,
-      khataLedgerList,
-      settleKhataForm,
-      openSettleKhataModal,
-      executeSettleKhata,
-      lifetimeMetrics,
-      recentInvoices,
-      toggleShiftStatus
-    };
-  }
-}).mount('#app');
-</script>
-
+    }).mount('#app');
+  </script>
 </body>
 </html>
